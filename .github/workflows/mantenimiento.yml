@@ -1,0 +1,29 @@
+name: Mantenimiento mensual
+
+on:
+  schedule:
+    - cron: '0 7 1 * *'   # día 1 de cada mes, 4 AM Argentina
+  workflow_dispatch:
+
+jobs:
+  mantenimiento:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Crear particiones futuras y calcular agregados
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          psql "$DATABASE_URL" <<'SQL'
+            -- Partición de dentro de 3 meses
+            SELECT crear_particion_mes(
+              EXTRACT(YEAR  FROM now() + interval '3 months')::INT,
+              EXTRACT(MONTH FROM now() + interval '3 months')::INT);
+
+            -- Agregados del mes que cerró
+            SELECT calcular_agregados_periodo(
+              date_trunc('month', now() - interval '1 month')::DATE,
+              (date_trunc('month', now()) - interval '1 day')::DATE);
+
+            -- Mensajes de chat viejos
+            SELECT purgar_mensajes_viejos(6);
+          SQL

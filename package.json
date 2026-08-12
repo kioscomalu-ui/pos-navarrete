@@ -7,10 +7,11 @@
     "dev:mobile": "pnpm --filter mobile start",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
-    "type-check": "pnpm -r type-check"
+    "type-check": "pnpm -r type-check",
+    "db:types": "supabase gen types typescript --project-id $env:SUPABASE_PROJECT_ID > packages/db/types.ts"
   },
   "devDependencies": {
-    "@types/node": "^22.20.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9",
+    "@types/node": "^22"
   }
 }
