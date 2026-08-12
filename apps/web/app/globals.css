@@ -5,6 +5,15 @@
   --foreground: #171717;
 }
 
+@import "tailwindcss";
+
+@layer components {
+  .input {
+    @apply w-full px-3 py-2 border border-neutral-300 rounded text-sm
+           bg-white focus:outline-none focus:border-neutral-900;
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

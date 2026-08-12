@@ -1,9 +1,5 @@
 packages:
   - 'apps/*'
   - 'packages/*'
-
 allowBuilds:
-  unrs-resolver: true
-
-onlyBuiltDependencies:
-  - unrs-resolver
+  unrs-resolver: set this to true or false
