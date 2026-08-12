@@ -9,14 +9,17 @@ importers:
   .:
     devDependencies:
       '@types/node':
-        specifier: ^22.20.1
+        specifier: ^22
         version: 22.20.1
       typescript:
-        specifier: ^5.9.3
+        specifier: ^5.9
         version: 5.9.3
 
   apps/web:
     dependencies:
+      '@pos/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@supabase/ssr':
         specifier: ^0.12.4
         version: 0.12.4(@supabase/supabase-js@2.112.3)
@@ -69,6 +72,12 @@ importers:
       typescript:
         specifier: ^5
         version: 5.9.3
+
+  packages/shared:
+    dependencies:
+      decimal.js:
+        specifier: ^10.6.0
+        version: 10.6.0
 
 packages:
 
