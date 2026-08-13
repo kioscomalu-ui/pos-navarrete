@@ -1,46 +1,130 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ============================================================
+   TOKENS
+   Paleta tomada del mundo del almacén: el verde esmalte de las
+   balanzas de mostrador, el ámbar del dial esperando una lectura,
+   el papel del envoltorio.
+   ============================================================ */
+
+@theme {
+  /* --- Color --- */
+  --color-verde-esmalte: #16332B;
+  --color-verde-hondo:   #0D211C;
+  --color-verde-claro:   #2A5145;
+  --color-papel:         #EDEFEA;
+  --color-mostrador:     #FFFFFF;
+  --color-renglon:       #F4F6F1;
+  --color-ambar-dial:    #E0A32E;
+  --color-ambar-suave:   #FBF0D8;
+  --color-rojo-plomo:    #A63D2F;
+  --color-verde-ok:      #2E7D5B;
+  --color-tiza:          #C9D2C6;
+
+  /* --- Tipografía ---
+     Las variables --fuente-* las define next/font en el layout raíz */
+  --font-ui:  var(--fuente-ui), system-ui, -apple-system, sans-serif;
+  --font-num: var(--fuente-num), ui-monospace, "Courier New", monospace;
 }
 
-@import "tailwindcss";
+/* ============================================================
+   BASE
+   ============================================================ */
 
-@layer components {
-  .input {
-    @apply w-full px-3 py-2 border border-neutral-300 rounded text-sm
-           bg-white focus:outline-none focus:border-neutral-900;
-  }
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  font-family: var(--font-ui);
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* Evita el rebote elástico al llegar al final en móvil */
+  overscroll-behavior-y: none;
 }
 
-/* --- Remito: oculto en pantalla, visible al imprimir --- */
+/* Foco visible para quien navega con teclado.
+   En una caja el teclado es el camino principal, no una alternativa. */
+:focus-visible {
+  outline: 2px solid var(--color-ambar-dial);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Los números de una caja no se seleccionan por accidente al tocar */
+kbd {
+  user-select: none;
+}
+
+/* Sacar las flechitas de los campos numéricos: en una caja estorban */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================================
+   UTILIDADES
+   ============================================================ */
+
+/* Todo importe usa esta clase: los dígitos ocupan el mismo ancho,
+   así los números se alinean en columna y el total no salta de
+   posición al pasar de $9.900 a $10.100. */
+.num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* ============================================================
+   COMPONENTES
+   ============================================================ */
+
+@layer components {
+  .input {
+    @apply w-full px-3 py-2 rounded border border-tiza bg-mostrador text-sm
+           focus:outline-none focus:border-verde-esmalte;
+  }
+
+  /* Renglones alternos del carrito */
+  .renglon-impar {
+    background-color: var(--color-mostrador);
+  }
+
+  .renglon-par {
+    background-color: var(--color-renglon);
+  }
+
+  /* Fila de un artículo por peso, esperando la cantidad */
+  .renglon-pesar {
+    background-color: var(--color-ambar-suave);
+    box-shadow: inset 3px 0 0 var(--color-ambar-dial);
+  }
+}
+
+/* ============================================================
+   REMITO
+   Oculto en pantalla, visible solo al imprimir.
+   Ancho fijo de 58 mm para impresora térmica.
+   ============================================================ */
+
 .remito-print {
   display: none;
 }
 
 @media print {
-  /* Ocultar toda la app */
+  /* Ocultar la aplicación entera */
   body > * {
     display: none !important;
   }
@@ -61,6 +145,7 @@ body {
     font-size: 9.5px;
     line-height: 1.35;
     color: #000;
+    background: #fff;
   }
 
   @page {

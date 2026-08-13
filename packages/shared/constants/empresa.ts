@@ -6,17 +6,17 @@
  */
 export const EMPRESA = {
   razonSocial: 'Navarrete Elsa Graciela',
-  nombreCorto: 'Navarrete',
+  nombreCorto: 'MALU-DOÑA ELSA',
 
   // --- Completar con los datos reales ---
-  cuit: '',
-  domicilio: '',
+  cuit: '27-22816882-9',
+  domicilio: 'San Martín 1207/1213',
   localidad: 'Cipolletti, Río Negro',
-  condicionIVA: '',        // 'Monotributo' | 'Responsable Inscripto' | ...
+  condicionIVA: 'Responsable Inscripto',        // 'Monotributo' | 'Responsable Inscripto' | ...
   ingresosBrutos: '',
   inicioActividades: '',
   telefono: '',
-  email: '',
+  email: 'kioscomalu@gmail.com',
 } as const;
 
 /** Identidad de la aplicación */

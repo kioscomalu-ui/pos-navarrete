@@ -9,7 +9,7 @@ import { BuscadorArticulos } from './BuscadorArticulos';
 import { CobroEfectivo } from './CobroEfectivo';
 import { SelectorCliente } from './SelectorCliente';
 import { RemitoImprimible } from './RemitoImprimible';
-import { formatearPrecio } from '@pos/shared/constants/empresa';
+import { formatearPrecio, formatearImporte } from '@pos/shared/constants/empresa';
 import type { MetodoPago } from '@pos/shared/types';
 import type { VentaLocal, ClienteLocal } from '@/lib/db-local';
 
@@ -108,18 +108,14 @@ export function PantallaCaja(props: Props) {
         mostrarAviso('Falta ingresar el peso de un artículo');
         return;
       }
-
-      // El efectivo pasa por el modal para calcular el vuelto
       if (metodo === 'efectivo') {
         setPidiendoEfectivo(true);
         return;
       }
-      // La cuenta corriente necesita elegir el cliente
       if (metodo === 'cuenta_corriente') {
         setEligiendoCliente(true);
         return;
       }
-
       void ejecutarCobro(metodo);
     },
     [carrito, ejecutarCobro, mostrarAviso],
@@ -144,7 +140,6 @@ export function PantallaCaja(props: Props) {
   // ---- Atajos de teclado ----
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      // Pantalla de vuelto
       if (ultimaVenta) {
         if (e.key === 'Enter') {
           e.preventDefault();
@@ -157,7 +152,6 @@ export function PantallaCaja(props: Props) {
         return;
       }
 
-      // Los modales y el arqueo manejan sus propias teclas
       if (pidiendoEfectivo || eligiendoCliente || buscando || cerrando || !caja) {
         return;
       }
@@ -190,7 +184,7 @@ export function PantallaCaja(props: Props) {
   // ================================================================
 
   if (buscandoCaja) {
-    return <p className="py-24 text-center text-neutral-500">Cargando…</p>;
+    return <p className="py-24 text-center text-verde-claro">Cargando…</p>;
   }
 
   if (!caja) {
@@ -221,9 +215,9 @@ export function PantallaCaja(props: Props) {
 
   if (!listo) {
     return (
-      <div className="py-24 text-center text-neutral-500">
+      <div className="py-24 text-center text-verde-claro">
         <p>Cargando catálogo…</p>
-        <p className="text-sm mt-1">{infoCarga}</p>
+        <p className="text-sm mt-1 opacity-70">{infoCarga}</p>
       </div>
     );
   }
@@ -238,53 +232,55 @@ export function PantallaCaja(props: Props) {
 
     return (
       <>
-        <div className="py-12 text-center space-y-8">
-          {hayVuelto ? (
-            <div>
-              <p className="text-sm text-neutral-500">Vuelto</p>
-              <p className="text-7xl font-mono font-semibold text-emerald-700">
-                {formatearPrecio(ultimaVenta.vuelto!)}
+        <div className="py-10 max-w-lg mx-auto">
+          <div className="bg-verde-esmalte rounded-xl overflow-hidden shadow-xl">
+            <div className="h-1.5 bg-ambar-dial" />
+
+            <div className="px-8 py-10 text-center">
+              <p className="text-[0.65rem] uppercase tracking-[0.2em] text-tiza/70">
+                {hayVuelto ? 'Vuelto' : esFiado ? 'Cargado a cuenta' : 'Cobrado'}
               </p>
-              <p className="text-sm text-neutral-500 mt-3">
-                Total {formatearPrecio(ultimaVenta.total)} · Recibido{' '}
-                {formatearPrecio(ultimaVenta.recibido ?? 0)}
+
+              <p className="num text-7xl font-bold text-white leading-none mt-3">
+                {formatearPrecio(hayVuelto ? ultimaVenta.vuelto! : ultimaVenta.total)}
               </p>
-            </div>
-          ) : (
-            <div>
-              <p className="text-sm text-neutral-500">
-                {esFiado ? 'Cargado a cuenta' : 'Cobrado'}
-              </p>
-              <p className="text-6xl font-mono font-semibold">
-                {formatearPrecio(ultimaVenta.total)}
-              </p>
+
+              {hayVuelto && (
+                <p className="num text-sm text-tiza/70 mt-4">
+                  Total {formatearPrecio(ultimaVenta.total)} · Recibido{' '}
+                  {formatearPrecio(ultimaVenta.recibido ?? 0)}
+                </p>
+              )}
+
               {esFiado && ultimaVenta.clienteNombre && (
-                <p className="text-sm text-neutral-500 mt-2">
+                <p className="text-sm text-tiza/70 mt-3">
                   {ultimaVenta.clienteNombre}
                 </p>
               )}
+
+              <p className="num text-xs text-tiza/50 mt-6">
+                {ultimaVenta.numeroFactura}
+                {ultimaVenta.remitoNumero && ` · Remito ${ultimaVenta.remitoNumero}`}
+              </p>
             </div>
-          )}
+          </div>
 
-          <p className="text-xs text-neutral-400 font-mono">
-            {ultimaVenta.numeroFactura}
-            {ultimaVenta.remitoNumero && ` · Remito ${ultimaVenta.remitoNumero}`}
-          </p>
-
-          <div className="flex gap-3 justify-center">
+          <div className="flex gap-3 mt-5">
             <button
               onClick={imprimirRemito}
-              className="px-5 py-3 border border-neutral-300 rounded bg-white"
+              className="flex-1 py-4 rounded-lg bg-mostrador ring-1 ring-tiza/60
+                         hover:ring-verde-claro flex items-center justify-center gap-2"
             >
-              Imprimir remito{' '}
-              <kbd className="ml-2 text-xs text-neutral-400">P</kbd>
+              Imprimir remito
+              <kbd className="text-xs text-verde-claro">P</kbd>
             </button>
             <button
               onClick={() => setUltimaVenta(null)}
-              className="px-6 py-3 bg-neutral-900 text-white rounded font-medium"
+              className="flex-1 py-4 rounded-lg bg-verde-esmalte text-white font-medium
+                         hover:bg-verde-hondo flex items-center justify-center gap-2"
             >
-              Siguiente cliente{' '}
-              <kbd className="ml-2 text-xs text-neutral-400">Enter</kbd>
+              Siguiente cliente
+              <kbd className="text-xs text-tiza/60">Enter</kbd>
             </button>
           </div>
         </div>
@@ -305,34 +301,50 @@ export function PantallaCaja(props: Props) {
   // ================================================================
 
   return (
-    <div className="grid grid-cols-[1fr_360px] gap-6 -mt-2">
-      {/* Carrito */}
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5 -mt-2">
+
+      {/* ---------- Mostrador ---------- */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-neutral-500">
-            {catalogo.cantidad} artículos · caja abierta con{' '}
-            {formatearPrecio(caja.efectivoInicial)}
+
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-verde-claro">
+            <span className="num">{catalogo.cantidad}</span> artículos · caja
+            abierta con{' '}
+            <span className="num">{formatearPrecio(caja.efectivoInicial)}</span>
           </span>
+
           <span className="flex items-center gap-3">
-            {!online && <span className="text-amber-600">Sin conexión</span>}
+            {!online && (
+              <span className="flex items-center gap-1.5 text-ambar-dial font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-ambar-dial" />
+                Sin conexión
+              </span>
+            )}
             {enCola > 0 && (
-              <span className="text-neutral-500">{enCola} por sincronizar</span>
+              <span className="text-verde-claro">
+                <span className="num">{enCola}</span> por sincronizar
+              </span>
             )}
           </span>
         </div>
 
         {aviso && (
-          <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded px-4 py-2.5 text-sm">
+          <div className="bg-ambar-suave border-l-4 border-ambar-dial rounded-r px-4 py-2.5 text-sm">
             {aviso}
           </div>
         )}
 
-        <div className="bg-white border border-neutral-200 rounded min-h-[24rem]">
+        <div className="bg-mostrador rounded-lg overflow-hidden shadow-sm ring-1 ring-tiza/60 min-h-[26rem]">
           {carrito.items.length === 0 ? (
-            <div className="py-24 text-center text-neutral-400">
-              <p>Escaneá un artículo para empezar</p>
-              <p className="text-sm mt-2">
-                <kbd className="px-1.5 py-0.5 bg-neutral-100 rounded text-xs">
+            <div className="py-28 text-center">
+              <p className="text-4xl font-black tracking-tight text-tiza select-none">
+                NAVARRETE
+              </p>
+              <p className="mt-6 text-verde-claro">
+                Escaneá un artículo para empezar
+              </p>
+              <p className="mt-2 text-sm text-verde-claro/70">
+                <kbd className="px-1.5 py-0.5 bg-papel rounded text-xs font-medium">
                   F4
                 </kbd>{' '}
                 para buscar por nombre
@@ -340,50 +352,65 @@ export function PantallaCaja(props: Props) {
             </div>
           ) : (
             <table className="w-full text-sm">
-              <tbody className="divide-y divide-neutral-100">
-                {carrito.items.map((item) => (
+              <tbody>
+                {carrito.items.map((item, i) => (
                   <tr
                     key={item.articuloId}
-                    className={item.requiereCantidad ? 'bg-amber-50' : ''}
+                    className={
+                      item.requiereCantidad
+                        ? 'renglon-pesar'
+                        : i % 2 === 0
+                          ? 'renglon-impar'
+                          : 'renglon-par'
+                    }
                   >
                     <td className="px-4 py-3">
-                      <div>{item.nombre}</div>
-                      <div className="text-xs text-neutral-500 font-mono">
+                      <div className="font-medium">{item.nombre}</div>
+                      <div className="num text-xs text-verde-claro mt-0.5">
                         {formatearPrecio(item.precioUnitario)}
-                        {item.unidad !== 'unidad' && ` / ${item.unidad}`}
+                        {item.unidad !== 'unidad' && (
+                          <span className="font-sans"> por {item.unidad}</span>
+                        )}
                       </div>
                     </td>
 
-                    <td className="px-4 py-3 w-36">
+                    <td className="px-3 py-3 w-40">
                       {item.requiereCantidad ? (
-                        <input
-                          ref={inputPeso}
-                          type="number"
-                          step="0.001"
-                          placeholder={item.unidad}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              engine.setCantidad(
-                                item.articuloId,
-                                Number(e.currentTarget.value),
-                              );
-                              e.currentTarget.blur();
-                            }
-                          }}
-                          className="w-full px-2 py-1 border border-amber-400 rounded text-right font-mono"
-                        />
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-ambar-dial font-medium whitespace-nowrap">
+                            pesar
+                          </span>
+                          <input
+                            ref={inputPeso}
+                            type="number"
+                            step="0.001"
+                            placeholder={item.unidad}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                engine.setCantidad(
+                                  item.articuloId,
+                                  Number(e.currentTarget.value),
+                                );
+                                e.currentTarget.blur();
+                              }
+                            }}
+                            className="num w-full px-2 py-1.5 rounded border-2 border-ambar-dial
+                                       bg-mostrador text-right focus:outline-none"
+                          />
+                        </div>
                       ) : (
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() =>
                               engine.setCantidad(item.articuloId, item.cantidad - 1)
                             }
-                            className="w-6 h-6 rounded hover:bg-neutral-100"
+                            className="w-7 h-7 rounded hover:bg-papel text-verde-claro text-lg leading-none"
+                            aria-label={`Quitar uno de ${item.nombre}`}
                           >
                             −
                           </button>
-                          <span className="w-14 text-center font-mono">
+                          <span className="num w-14 text-center font-medium">
                             {item.unidad === 'unidad'
                               ? item.cantidad
                               : item.cantidad.toFixed(3)}
@@ -392,7 +419,8 @@ export function PantallaCaja(props: Props) {
                             onClick={() =>
                               engine.setCantidad(item.articuloId, item.cantidad + 1)
                             }
-                            className="w-6 h-6 rounded hover:bg-neutral-100"
+                            className="w-7 h-7 rounded hover:bg-papel text-verde-claro text-lg leading-none"
+                            aria-label={`Agregar uno de ${item.nombre}`}
                           >
                             +
                           </button>
@@ -400,14 +428,15 @@ export function PantallaCaja(props: Props) {
                       )}
                     </td>
 
-                    <td className="px-4 py-3 text-right font-mono w-28">
+                    <td className="num px-4 py-3 text-right font-medium w-32">
                       {formatearPrecio(item.subtotal)}
                     </td>
 
-                    <td className="px-2 py-3 w-8">
+                    <td className="px-3 py-3 w-10">
                       <button
                         onClick={() => engine.quitar(item.articuloId)}
-                        className="text-neutral-300 hover:text-red-600"
+                        className="w-6 h-6 rounded text-tiza hover:text-rojo-plomo hover:bg-papel"
+                        aria-label={`Quitar ${item.nombre}`}
                       >
                         ×
                       </button>
@@ -420,21 +449,46 @@ export function PantallaCaja(props: Props) {
         </div>
       </div>
 
-      {/* Panel de cobro */}
-      <aside className="space-y-3">
-        <div className="bg-white border border-neutral-200 rounded p-5">
-          <div className="text-xs text-neutral-500 uppercase tracking-wide">
-            Total
-          </div>
-          <div className="text-4xl font-mono font-semibold mt-1">
-            {formatearPrecio(carrito.total)}
-          </div>
-          <div className="text-sm text-neutral-500 mt-1">
-            {carrito.cantidadItems}{' '}
-            {carrito.cantidadItems === 1 ? 'artículo' : 'artículos'}
+      {/* ---------- Panel de cobro ---------- */}
+      <aside className="space-y-2.5 lg:sticky lg:top-20 lg:self-start">
+
+        {/* Visor */}
+        <div className="bg-verde-esmalte rounded-lg overflow-hidden shadow-lg">
+          <div
+            className={`h-1 transition-colors ${
+              carrito.hayPendientes ? 'bg-ambar-dial' : 'bg-verde-claro/40'
+            }`}
+          />
+
+          <div className="px-5 pt-4 pb-5">
+            <div className="text-[0.65rem] uppercase tracking-[0.18em] text-tiza/70">
+              Total
+            </div>
+
+            <div className="flex items-baseline gap-1.5 mt-1">
+              <span className="num text-2xl text-tiza/60">$</span>
+              <span className="num text-5xl font-bold text-white leading-none">
+                {formatearImporte(carrito.total)}
+              </span>
+            </div>
+
+            <div className="text-xs text-tiza/70 mt-2">
+              {carrito.cantidadItems === 0 ? (
+                'Sin artículos'
+              ) : (
+                <>
+                  <span className="num">{carrito.cantidadItems}</span>
+                  {carrito.cantidadItems === 1 ? ' artículo' : ' artículos'}
+                </>
+              )}
+              {carrito.hayPendientes && (
+                <span className="text-ambar-dial"> · falta pesar</span>
+              )}
+            </div>
           </div>
         </div>
 
+        {/* Cobro */}
         <div className="space-y-2">
           <BotonCobro
             tecla="F1"
@@ -445,7 +499,7 @@ export function PantallaCaja(props: Props) {
           />
           <BotonCobro
             tecla="F2"
-            label="POSNET"
+            label="Tarjeta"
             onClick={() => cobrar('posnet')}
             disabled={carrito.items.length === 0}
           />
@@ -465,31 +519,31 @@ export function PantallaCaja(props: Props) {
 
         <button
           onClick={() => setBuscando(true)}
-          className="w-full py-2.5 text-sm border border-neutral-300 rounded bg-white hover:bg-neutral-50 flex items-center justify-between px-4"
+          className="w-full py-3 text-sm rounded-lg bg-mostrador ring-1 ring-tiza/60
+                     hover:ring-verde-claro flex items-center justify-between px-4"
         >
           <span>Buscar artículo</span>
-          <kbd className="text-xs text-neutral-400">F4</kbd>
+          <kbd className="text-xs text-verde-claro">F4</kbd>
         </button>
 
-        <button
-          onClick={() => engine.limpiar()}
-          disabled={carrito.items.length === 0}
-          className="w-full py-2 text-sm text-neutral-500 hover:text-neutral-900 disabled:opacity-30"
-        >
-          Cancelar venta <kbd className="text-xs">Esc</kbd>
-        </button>
-
-        <div className="pt-3 border-t border-neutral-200">
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={() => engine.limpiar()}
+            disabled={carrito.items.length === 0}
+            className="flex-1 py-2 text-xs text-verde-claro hover:text-rojo-plomo disabled:opacity-30"
+          >
+            Cancelar venta
+          </button>
           <button
             onClick={() => setCerrando(true)}
-            className="w-full py-2 text-sm text-neutral-500 hover:text-neutral-900"
+            className="flex-1 py-2 text-xs text-verde-claro hover:text-verde-esmalte"
           >
             Cerrar caja
           </button>
         </div>
       </aside>
 
-      {/* Modales */}
+      {/* ---------- Modales ---------- */}
       {buscando && (
         <BuscadorArticulos
           onElegir={(id) => {
@@ -543,14 +597,17 @@ function BotonCobro({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`w-full py-3.5 rounded font-medium flex items-center justify-between px-4 disabled:opacity-30 ${
+      className={`w-full py-4 lg:py-3.5 rounded-lg font-medium flex items-center
+                  justify-between px-4 transition disabled:opacity-30 ${
         primario
-          ? 'bg-neutral-900 text-white'
-          : 'bg-white border border-neutral-300 hover:bg-neutral-50'
+          ? 'bg-verde-esmalte text-white hover:bg-verde-hondo shadow-sm'
+          : 'bg-mostrador ring-1 ring-tiza/60 hover:ring-verde-claro'
       }`}
     >
       <span>{label}</span>
-      <kbd className="text-xs text-neutral-400">{tecla}</kbd>
+      <kbd className={`text-xs ${primario ? 'text-tiza/60' : 'text-verde-claro'}`}>
+        {tecla}
+      </kbd>
     </button>
   );
 }

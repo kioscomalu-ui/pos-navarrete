@@ -19,6 +19,11 @@ jobs:
         env:
           DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
+          if [ -z "$DB_URL" ]; then
+            echo "Falta el secreto SUPABASE_DB_URL"
+            exit 1
+          fi
+
           FECHA=$(date +%Y%m%d)
           pg_dump "$DB_URL" \
             --no-owner --no-privileges \
@@ -26,7 +31,7 @@ jobs:
             -f backup_$FECHA.sql
           gzip backup_$FECHA.sql
           ls -lh backup_$FECHA.sql.gz
-
+      
       - name: Verificar que no esté vacío
         run: |
           FECHA=$(date +%Y%m%d)

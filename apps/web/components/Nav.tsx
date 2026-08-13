@@ -52,13 +52,14 @@ export function Nav({
   }
 
   return (
-    <header className="border-b border-neutral-200 bg-white sticky top-0 z-30">
-      <div className="max-w-6xl mx-auto px-6 h-14 flex items-center gap-6">
+    <header className="bg-verde-esmalte sticky top-0 z-30 shadow-sm">
+      <div className="max-w-6xl mx-auto px-6 h-14 flex items-center gap-5">
         <Link
           href="/caja"
-          className="font-semibold tracking-tight whitespace-nowrap"
+          className="font-black tracking-tight text-white whitespace-nowrap
+                     hover:text-tiza transition-colors"
         >
-          Navarrete
+          NAVARRETE
         </Link>
 
         <nav className="flex gap-1 flex-1 overflow-x-auto">
@@ -70,10 +71,11 @@ export function Nav({
               <Link
                 key={s.href}
                 href={s.href}
+                aria-current={activo ? 'page' : undefined}
                 className={`px-3 py-1.5 rounded text-sm whitespace-nowrap transition ${
                   activo
-                    ? 'bg-neutral-900 text-white'
-                    : 'text-neutral-600 hover:bg-neutral-100'
+                    ? 'bg-white/15 text-white font-medium'
+                    : 'text-tiza hover:bg-white/10 hover:text-white'
                 }`}
               >
                 {s.label}
@@ -82,20 +84,18 @@ export function Nav({
           })}
         </nav>
 
-        <BotonChat
-          ctx={{ usuarioId, nombreUsuario: nombre, sucursalId }}
-        />
+        <BotonChat ctx={{ usuarioId, nombreUsuario: nombre, sucursalId }} />
 
         <div className="text-right text-xs leading-tight hidden sm:block">
-          <div className="font-medium">{nombreCompleto}</div>
-          <div className="text-neutral-500">
+          <div className="font-medium text-white">{nombreCompleto}</div>
+          <div className="text-tiza/70">
             {rol} · {sucursalNombre}
           </div>
         </div>
 
         <button
           onClick={salir}
-          className="text-sm text-neutral-500 hover:text-neutral-900 whitespace-nowrap"
+          className="text-sm text-tiza hover:text-white whitespace-nowrap transition-colors"
         >
           Salir
         </button>
