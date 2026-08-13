@@ -8,6 +8,8 @@ import {
   ajustarStock,
   type EstadoForm,
 } from '@/app/(app)/articulos/acciones';
+import { ProveedoresArticulo } from './ProveedoresArticulo';
+import { HistorialCostos } from './HistorialCostos';
 import { calcularPrecio, calcularMargen } from '@pos/shared/utils/calcular-precio';
 import { formatearPrecio } from '@pos/shared/constants/empresa';
 import type {
@@ -87,7 +89,10 @@ export function FormArticulo({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
-      {/* ============ Datos ============ */}
+
+      {/* ============================================================
+          Columna 1 · Formulario
+          ============================================================ */}
       <form action={accion} id="form-articulo" className="space-y-5">
         {articulo && <input type="hidden" name="id" value={articulo.id} />}
 
@@ -165,7 +170,14 @@ export function FormArticulo({
             </Campo>
           </div>
 
-          <Campo label="Proveedor principal">
+          <Campo
+            label="Proveedor principal"
+            ayuda={
+              articulo
+                ? 'Se cambia desde el panel de proveedores, más abajo'
+                : 'Después vas a poder cargar varios proveedores'
+            }
+          >
             <select
               name="proveedorId"
               defaultValue={articulo?.proveedor_principal_id ?? ''}
@@ -189,13 +201,15 @@ export function FormArticulo({
           </Campo>
         </section>
 
-        {/* --- Precio --- */}
+        {/* --- Costo y ganancia --- */}
         <section className="bg-mostrador rounded-lg ring-1 ring-tiza/60 p-6 space-y-4">
           <h2 className="text-sm font-medium">Costo y ganancia</h2>
 
           <div className="grid grid-cols-3 gap-4">
             <Campo
-              label={unidad === 'unidad' ? 'Costo por unidad' : `Costo por ${unidad}`}
+              label={
+                unidad === 'unidad' ? 'Costo por unidad' : `Costo por ${unidad}`
+              }
             >
               <input
                 name="costoUnitario"
@@ -289,11 +303,15 @@ export function FormArticulo({
         </section>
       </form>
 
-      {/* ============ Panel lateral ============ */}
+      {/* ============================================================
+          Columna 2 · Panel lateral
+          ============================================================ */}
       <aside className="space-y-3 lg:sticky lg:top-20">
         {/* Precio calculado */}
         <div className="bg-verde-esmalte rounded-lg overflow-hidden shadow-lg">
-          <div className={`h-1 ${margenBajo ? 'bg-rojo-plomo' : 'bg-verde-claro/40'}`} />
+          <div
+            className={`h-1 ${margenBajo ? 'bg-rojo-plomo' : 'bg-verde-claro/40'}`}
+          />
 
           <div className="p-5 space-y-3">
             <div className="text-[0.65rem] uppercase tracking-[0.18em] text-tiza/70">
@@ -364,7 +382,6 @@ export function FormArticulo({
           Cancelar
         </Link>
 
-        {/* Ajuste de stock y baja, solo al editar */}
         {articulo && (
           <>
             <AjusteStock
@@ -372,10 +389,24 @@ export function FormArticulo({
               unidad={articulo.unidad}
               stockActual={stockActual ?? 0}
             />
+            <HistorialCostos articuloId={articulo.id} />
             <BajaArticulo id={articulo.id} activo={articulo.activo} />
           </>
         )}
       </aside>
+
+      {/* ============================================================
+          Fila 2 · Proveedores (ocupa la columna del formulario)
+          Va fuera del <form> porque tiene sus propias acciones.
+          ============================================================ */}
+      {articulo && (
+        <div className="lg:col-start-1 lg:row-start-2">
+          <ProveedoresArticulo
+            articuloId={articulo.id}
+            proveedores={proveedores}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -411,12 +442,15 @@ function AjusteStock({
             </span>
           </span>
         </div>
+
         <button
+          type="button"
           onClick={() => setAbierto(true)}
           className="w-full mt-3 py-2 text-xs text-verde-claro hover:text-verde-esmalte"
         >
           Ajustar stock
         </button>
+
         {mensaje && (
           <p className="text-xs text-verde-ok mt-2 text-center">{mensaje}</p>
         )}
@@ -456,6 +490,7 @@ function AjusteStock({
 
       <div className="flex gap-2">
         <button
+          type="button"
           onClick={() => {
             setAbierto(false);
             setMensaje('');
@@ -465,6 +500,7 @@ function AjusteStock({
           Cancelar
         </button>
         <button
+          type="button"
           disabled={pendiente || razon.trim().length < 3}
           onClick={() =>
             startTransition(async () => {
@@ -508,10 +544,11 @@ function BajaArticulo({ id, activo }: { id: string; activo: boolean }) {
     return (
       <div className="bg-papel rounded-lg p-4 text-center space-y-2">
         <p className="text-xs text-verde-claro">
-          Este artículo está dado de baja. No aparece en la caja, pero sigue
-          en los reportes históricos.
+          Este artículo está dado de baja. No aparece en la caja, pero sigue en
+          los reportes históricos.
         </p>
         <button
+          type="button"
           disabled={pendiente}
           onClick={() =>
             startTransition(() => {
@@ -529,6 +566,7 @@ function BajaArticulo({ id, activo }: { id: string; activo: boolean }) {
   if (!confirmando) {
     return (
       <button
+        type="button"
         onClick={() => setConfirmando(true)}
         className="w-full py-2 text-xs text-verde-claro hover:text-rojo-plomo"
       >
@@ -543,14 +581,17 @@ function BajaArticulo({ id, activo }: { id: string; activo: boolean }) {
         Va a desaparecer de la caja en la próxima apertura. Las ventas
         anteriores lo siguen mostrando.
       </p>
+
       <div className="flex gap-2">
         <button
+          type="button"
           onClick={() => setConfirmando(false)}
           className="flex-1 py-2 text-xs rounded ring-1 ring-tiza"
         >
           Cancelar
         </button>
         <button
+          type="button"
           disabled={pendiente}
           onClick={() =>
             startTransition(() => {
