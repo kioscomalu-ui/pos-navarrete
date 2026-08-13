@@ -33,3 +33,132 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* --- Remito: oculto en pantalla, visible al imprimir --- */
+.remito-print {
+  display: none;
+}
+
+@media print {
+  /* Ocultar toda la app */
+  body > * {
+    display: none !important;
+  }
+
+  .remito-print,
+  .remito-print * {
+    display: revert !important;
+  }
+
+  .remito-print {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 58mm;
+    padding: 2mm;
+    font-family: ui-monospace, "Courier New", monospace;
+    font-size: 9.5px;
+    line-height: 1.35;
+    color: #000;
+  }
+
+  @page {
+    margin: 0;
+    size: 58mm auto;
+  }
+
+  .remito-empresa {
+    text-align: center;
+    font-weight: 700;
+    font-size: 1.2em;
+    letter-spacing: 0.05em;
+    line-height: 1.2;
+    margin-bottom: 3px;
+  }
+
+  .remito-datos {
+    text-align: center;
+    font-size: 0.9em;
+    line-height: 1.4;
+  }
+
+  .remito-print hr {
+    border: 0;
+    border-top: 1px dashed #000;
+    margin: 5px 0;
+  }
+
+  .remito-tipo {
+    text-align: center;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    font-size: 1.05em;
+  }
+
+  .remito-subtipo {
+    text-align: center;
+    font-size: 0.82em;
+  }
+
+  .remito-meta > div {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.95em;
+  }
+
+  .remito-item {
+    margin-bottom: 2px;
+  }
+
+  .remito-linea {
+    display: flex;
+    justify-content: space-between;
+    gap: 4px;
+  }
+
+  .remito-nombre {
+    word-break: break-word;
+  }
+
+  .remito-importe {
+    white-space: nowrap;
+  }
+
+  .remito-detalle {
+    padding-left: 6px;
+    font-size: 0.88em;
+  }
+
+  .remito-total {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 700;
+    font-size: 1.4em;
+    padding: 3px 0;
+  }
+
+  .remito-legal {
+    text-align: center;
+    font-size: 0.8em;
+    border: 1px solid #000;
+    padding: 3px 2px;
+    margin-top: 5px;
+    white-space: pre-line;
+  }
+
+  .remito-pie {
+    text-align: center;
+    font-size: 0.85em;
+    margin-top: 6px;
+    white-space: pre-line;
+  }
+
+  .remito-gracias {
+    text-align: center;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    margin-top: 6px;
+    font-size: 0.95em;
+  }
+}

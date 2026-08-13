@@ -3,6 +3,12 @@ import { createClient } from '@/lib/supabase-server';
 import { getSesion, puedeEditarCatalogo } from '@/lib/sesion';
 import { formatearPrecio } from '@pos/shared/constants/empresa';
 import { calcularMargen } from '@pos/shared/utils/calcular-precio';
+import { BotonPedirStock } from '@/components/chat/BotonPedirStock';
+
+interface StockFila {
+  cantidad_disponible: number;
+  sucursal_id: string;
+}
 
 export default async function ArticulosPage({
   searchParams,
@@ -15,12 +21,15 @@ export default async function ArticulosPage({
 
   let query = supabase
     .from('articulos')
-    .select(`
+    .select(
+      `
       id, codigo_barras, nombre, unidad, activo,
-      costo_unitario, precio_venta_final,
+      costo_unitario, precio_venta_final, stock_minimo,
       categorias_articulos(nombre),
       stock_sucursal(cantidad_disponible, sucursal_id)
-    `)
+    `,
+    )
+    .eq('activo', true)
     .order('nombre')
     .limit(100);
 
@@ -28,13 +37,22 @@ export default async function ArticulosPage({
 
   const { data: articulos, error } = await query;
 
+  const ctxChat = {
+    usuarioId: sesion.usuarioId,
+    nombreUsuario: sesion.nombre,
+    sucursalId: sesion.sucursalId,
+  };
+
   return (
     <div className="space-y-6">
+      {/* Encabezado */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Artículos</h1>
           <p className="text-sm text-neutral-500">
-            {articulos?.length ?? 0} artículos
+            {articulos?.length ?? 0}
+            {articulos?.length === 100 ? '+ (mostrando los primeros 100)' : ''}
+            {' '}artículos
           </p>
         </div>
 
@@ -56,6 +74,7 @@ export default async function ArticulosPage({
         )}
       </div>
 
+      {/* Búsqueda */}
       <form className="flex gap-2">
         <input
           name="q"
@@ -66,12 +85,21 @@ export default async function ArticulosPage({
         <button className="px-4 py-2 text-sm border border-neutral-300 rounded hover:bg-neutral-100">
           Buscar
         </button>
+        {q && (
+          <Link
+            href="/articulos"
+            className="px-4 py-2 text-sm text-neutral-500 hover:text-neutral-900"
+          >
+            Limpiar
+          </Link>
+        )}
       </form>
 
       {error && (
         <p className="text-sm text-red-600 font-mono">{error.message}</p>
       )}
 
+      {/* Tabla */}
       <div className="bg-white border border-neutral-200 rounded overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-neutral-500 text-xs uppercase tracking-wide">
@@ -82,43 +110,76 @@ export default async function ArticulosPage({
               <th className="text-right font-medium px-4 py-2.5">Precio</th>
               <th className="text-right font-medium px-4 py-2.5">Margen</th>
               <th className="text-right font-medium px-4 py-2.5">Stock</th>
+              <th className="w-16 px-4 py-2.5"></th>
             </tr>
           </thead>
+
           <tbody className="divide-y divide-neutral-100">
             {articulos?.map((a) => {
-              const margen = calcularMargen(a.costo_unitario, a.precio_venta_final ?? 0);
-              const stock = (a.stock_sucursal as { cantidad_disponible: number; sucursal_id: string }[])
-                ?.find((s) => s.sucursal_id === sesion.sucursalId);
+              const costo = Number(a.costo_unitario);
+              const precio = Number(a.precio_venta_final ?? 0);
+              const margen = calcularMargen(costo, precio);
+
+              const stock = (a.stock_sucursal as unknown as StockFila[])?.find(
+                (s) => s.sucursal_id === sesion.sucursalId,
+              );
+              const disponible = Number(stock?.cantidad_disponible ?? 0);
+              const bajoMinimo = disponible < Number(a.stock_minimo);
 
               return (
                 <tr key={a.id} className="hover:bg-neutral-50">
                   <td className="px-4 py-2.5">
-                    <Link href={`/articulos/${a.id}`} className="hover:underline">
+                    <Link
+                      href={`/articulos/${a.id}`}
+                      className="hover:underline"
+                    >
                       {a.nombre}
                     </Link>
-                    {!a.activo && (
-                      <span className="ml-2 text-xs text-neutral-400">inactivo</span>
+                    {a.unidad !== 'unidad' && (
+                      <span className="ml-2 text-xs text-neutral-400">
+                        por {a.unidad}
+                      </span>
                     )}
                   </td>
+
                   <td className="px-4 py-2.5 font-mono text-xs text-neutral-500">
                     {a.codigo_barras ?? '—'}
                   </td>
-                  <td className="px-4 py-2.5 text-right font-mono">
-                    {formatearPrecio(a.costo_unitario)}
+
+                  <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
+                    {formatearPrecio(costo)}
                   </td>
+
                   <td className="px-4 py-2.5 text-right font-mono font-medium">
-                    {formatearPrecio(a.precio_venta_final ?? 0)}
+                    {formatearPrecio(precio)}
                   </td>
-                  <td className={`px-4 py-2.5 text-right font-mono ${
-                    margen.porcentaje < 10 ? 'text-red-600' : 'text-neutral-500'
-                  }`}>
+
+                  <td
+                    className={`px-4 py-2.5 text-right font-mono ${
+                      margen.porcentaje < 10 ? 'text-red-600' : 'text-neutral-500'
+                    }`}
+                  >
                     {margen.porcentaje}%
                   </td>
-                  <td className="px-4 py-2.5 text-right font-mono">
-                    {stock?.cantidad_disponible ?? 0}
+
+                  <td
+                    className={`px-4 py-2.5 text-right font-mono ${
+                      bajoMinimo ? 'text-amber-700' : ''
+                    }`}
+                  >
+                    {a.unidad === 'unidad'
+                      ? disponible
+                      : disponible.toFixed(2)}
                     <span className="text-neutral-400 ml-1 text-xs">
                       {a.unidad === 'unidad' ? 'un' : a.unidad}
                     </span>
+                  </td>
+
+                  <td className="px-4 py-2.5 text-right">
+                    <BotonPedirStock
+                      articulo={{ id: a.id, nombre: a.nombre }}
+                      ctx={ctxChat}
+                    />
                   </td>
                 </tr>
               );
@@ -128,7 +189,9 @@ export default async function ArticulosPage({
 
         {articulos?.length === 0 && (
           <p className="px-4 py-12 text-center text-sm text-neutral-400">
-            {q ? 'No se encontraron artículos' : 'Todavía no hay artículos cargados'}
+            {q
+              ? `No se encontraron artículos con "${q}"`
+              : 'Todavía no hay artículos cargados'}
           </p>
         )}
       </div>

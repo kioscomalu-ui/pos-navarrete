@@ -1,0 +1,35 @@
+{
+  "name": "Navarrete · Ventas",
+  "short_name": "Navarrete",
+  "description": "Sistema de gestión de ventas",
+  "start_url": "/caja",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#fafafa",
+  "theme_color": "#171717",
+  "lang": "es-AR",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    { "name": "Caja", "url": "/caja" },
+    { "name": "Cobranzas", "url": "/cobranzas" }
+  ]
+}
