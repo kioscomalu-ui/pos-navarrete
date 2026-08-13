@@ -1,0 +1,61 @@
+name: Backup diario
+
+on:
+  schedule:
+    - cron: '0 5 * * *'    # 2 AM en Argentina (UTC-3)
+  workflow_dispatch:        # permite dispararlo a mano
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Instalar cliente de Postgres
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+
+      - name: Generar el dump
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          FECHA=$(date +%Y%m%d)
+          pg_dump "$DB_URL" \
+            --no-owner --no-privileges \
+            --exclude-schema='auth|storage|realtime|supabase_functions|extensions|graphql|vault' \
+            -f backup_$FECHA.sql
+          gzip backup_$FECHA.sql
+          ls -lh backup_$FECHA.sql.gz
+
+      - name: Verificar que no esté vacío
+        run: |
+          FECHA=$(date +%Y%m%d)
+          TAMANIO=$(stat -c%s backup_$FECHA.sql.gz)
+          if [ "$TAMANIO" -lt 10000 ]; then
+            echo "El backup pesa $TAMANIO bytes: algo salió mal"
+            exit 1
+          fi
+          # Que se pueda descomprimir y contenga las tablas esperadas
+          gunzip -c backup_$FECHA.sql.gz | grep -q "CREATE TABLE public.ventas" \
+            || { echo "El dump no contiene la tabla ventas"; exit 1; }
+
+      - name: Subir a Supabase Storage
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          FECHA=$(date +%Y%m%d)
+          curl -sS -X POST \
+            "$SUPABASE_URL/storage/v1/object/backups/backup_$FECHA.sql.gz" \
+            -H "Authorization: Bearer $SERVICE_KEY" \
+            -H "Content-Type: application/gzip" \
+            -H "x-upsert: true" \
+            --data-binary "@backup_$FECHA.sql.gz" \
+            --fail
+
+      - name: Guardar copia en GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-${{ github.run_id }}
+          path: backup_*.sql.gz
+          retention-days: 30

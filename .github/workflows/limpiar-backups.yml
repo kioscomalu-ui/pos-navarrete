@@ -1,0 +1,31 @@
+name: Limpiar backups viejos
+
+on:
+  schedule:
+    - cron: '0 6 1 * *'    # día 1 de cada mes
+  workflow_dispatch:
+
+jobs:
+  limpiar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Borrar backups de más de 90 días
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          LISTA=$(curl -sS -X POST "$SUPABASE_URL/storage/v1/object/list/backups" \
+            -H "Authorization: Bearer $SERVICE_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"prefix":"","limit":1000}')
+
+          CORTE=$(date -d '90 days ago' +%Y%m%d)
+
+          echo "$LISTA" | grep -o 'backup_[0-9]*\.sql\.gz' | sort -u | while read ARCHIVO; do
+            FECHA=$(echo "$ARCHIVO" | grep -o '[0-9]\{8\}')
+            if [ "$FECHA" -lt "$CORTE" ]; then
+              echo "Borrando $ARCHIVO"
+              curl -sS -X DELETE "$SUPABASE_URL/storage/v1/object/backups/$ARCHIVO" \
+                -H "Authorization: Bearer $SERVICE_KEY"
+            fi
+          done

@@ -1,0 +1,51 @@
+name: Mantenimiento mensual
+
+on:
+  schedule:
+    - cron: '0 7 1 * *'    # día 1, 4 AM Argentina
+  workflow_dispatch:
+
+jobs:
+  mantenimiento:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Instalar cliente de Postgres
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+
+      - name: Particiones, agregados y limpieza
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          psql "$DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+            -- Particiones de los próximos 6 meses
+            DO $$
+            DECLARE d DATE := date_trunc('month', now())::DATE;
+            BEGIN
+              FOR i IN 0..6 LOOP
+                PERFORM crear_particion_mes(
+                  EXTRACT(YEAR  FROM d + (i || ' month')::INTERVAL)::INT,
+                  EXTRACT(MONTH FROM d + (i || ' month')::INTERVAL)::INT);
+              END LOOP;
+            END $$;
+
+            -- Agregados del mes que cerró
+            SELECT calcular_agregados_periodo(
+              date_trunc('month', now() - interval '1 month')::DATE,
+              (date_trunc('month', now()) - interval '1 day')::DATE);
+
+            -- Mensajes de chat de más de 6 meses
+            SELECT purgar_mensajes_viejos(6);
+
+            -- Estadísticas para el planificador
+            ANALYZE;
+          SQL
+
+      - name: Reporte de espacio
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          psql "$DB_URL" -c "SELECT * FROM v_espacio_tablas LIMIT 10;"
+          psql "$DB_URL" -c "SELECT COUNT(*) AS en_particion_default FROM ventas_default;"
