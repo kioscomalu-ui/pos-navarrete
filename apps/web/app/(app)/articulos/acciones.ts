@@ -11,6 +11,16 @@ import { calcularPrecio, validarPrecio } from '@pos/shared/utils/calcular-precio
 // Validación
 // ====================================================================
 
+/**
+ * Los checkbox de HTML no mandan nada cuando están destildados, y "on"
+ * cuando están tildados. Para que el valor sea siempre explícito, el
+ * formulario usa un campo oculto con "true" o "false" y acá se traduce.
+ */
+const booleanoDeFormulario = z.preprocess(
+  (v) => v === 'true' || v === 'on' || v === true,
+  z.boolean(),
+);
+
 const esquema = z.object({
   codigoBarras: z.string().trim().optional(),
   codigoInterno: z.string().trim().optional(),
@@ -29,8 +39,8 @@ const esquema = z.object({
     'a_la_decena',
   ]),
 
-  // Precio fijado a mano: si viene, manda sobre el cálculo
-  precioManual: z.coerce.boolean().optional(),
+  // Precio fijado a mano: si está activo, manda sobre el cálculo
+  precioManual: booleanoDeFormulario.optional(),
   precioFijo: z.coerce.number().min(0).optional(),
 
   stockMinimo: z.coerce.number().min(0),
@@ -62,9 +72,16 @@ export async function guardarArticulo(
   const d = parsed.data;
 
   // El precio lo resuelve el servidor: el navegador solo previsualiza.
-  // Si se fijó a mano, ese valor manda y no se recalcula nunca más
-  // desde el costo (ni acá ni en los ajustes masivos).
+  // Con precio manual, el valor ingresado manda y no se recalcula nunca
+  // más desde el costo — ni acá ni en los ajustes masivos.
   const usarManual = !!d.precioManual && !!d.precioFijo && d.precioFijo > 0;
+
+  if (d.precioManual && (!d.precioFijo || d.precioFijo <= 0)) {
+    return {
+      error: 'Ingresá el precio de venta o destildá la opción',
+      campo: 'precioFijo',
+    };
+  }
 
   const precio = usarManual
     ? {
@@ -250,8 +267,9 @@ export async function crearCategoria(nombre: string): Promise<EstadoForm> {
 // ====================================================================
 
 /**
- * Saca la marca de precio manual: el artículo vuelve a calcular
- * su precio desde el costo y el margen.
+ * Saca la marca de precio manual: el artículo vuelve a calcular su
+ * precio desde el costo y el margen. Para cuando la razón que motivó
+ * fijarlo ya no aplica.
  */
 export async function liberarPrecioManual(
   articuloId: string,

@@ -281,14 +281,20 @@ export function FormArticulo({
 
           {/* --- Precio fijado a mano --- */}
           <div className="pt-4 border-t border-tiza/40 space-y-3">
+            {/* Campo oculto: manda el valor explícito, sin depender
+                de cómo el navegador serializa un checkbox */}
+            <input
+              type="hidden"
+              name="precioManual"
+              value={precioManual ? 'true' : 'false'}
+            />
+
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                name="precioManual"
                 checked={precioManual}
                 onChange={(e) => {
                   setPrecioManual(e.target.checked);
-                  // Al activarlo, arrancar desde el precio calculado
                   if (e.target.checked && !precioFijo) {
                     setPrecioFijo(calculado.precioFinal);
                   }
@@ -317,8 +323,7 @@ export function FormArticulo({
 
                 <p className="text-xs text-ambar-dial">
                   Este precio no se recalcula cuando sube el costo, ni siquiera
-                  en un ajuste masivo. Revisalo cada tanto para que el margen no
-                  se achique sin que lo notes.
+                  en un ajuste masivo.
                 </p>
               </>
             )}
