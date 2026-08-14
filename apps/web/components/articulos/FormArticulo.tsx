@@ -29,6 +29,8 @@ interface Articulo {
   costo_unitario: number;
   margen_tipo: MargenTipo;
   margen_valor: number;
+  precio_venta_final: number | null;
+  precio_manual: boolean;
   stock_minimo: number;
   stock_maximo: number | null;
   proveedor_principal_id: string | null;
@@ -69,7 +71,14 @@ export function FormArticulo({
     articulo?.unidad ?? 'unidad',
   );
 
-  const precio = useMemo(
+  const [precioManual, setPrecioManual] = useState(
+    articulo?.precio_manual ?? false,
+  );
+  const [precioFijo, setPrecioFijo] = useState(
+    Number(articulo?.precio_venta_final ?? 0),
+  );
+
+  const calculado = useMemo(
     () =>
       calcularPrecio({
         costoUnitario: costo,
@@ -80,9 +89,11 @@ export function FormArticulo({
     [costo, margenTipo, margenValor, regla],
   );
 
+  const precioMostrado = precioManual ? precioFijo : calculado.precioFinal;
+
   const margenReal = useMemo(
-    () => calcularMargen(costo, precio.precioFinal),
-    [costo, precio.precioFinal],
+    () => calcularMargen(costo, precioMostrado),
+    [costo, precioMostrado],
   );
 
   const margenBajo = margenReal.porcentaje < 10;
@@ -228,6 +239,7 @@ export function FormArticulo({
                 name="margenTipo"
                 value={margenTipo}
                 onChange={(e) => setMargenTipo(e.target.value as MargenTipo)}
+                disabled={precioManual}
                 className="input"
               >
                 <option value="porcentaje">Porcentaje</option>
@@ -245,6 +257,7 @@ export function FormArticulo({
                 step="0.01"
                 value={margenValor}
                 onChange={(e) => setMargenValor(Number(e.target.value))}
+                disabled={precioManual}
                 required
                 className="input num text-right"
               />
@@ -256,6 +269,7 @@ export function FormArticulo({
               name="reglaRedondeo"
               value={regla}
               onChange={(e) => setRegla(e.target.value as ReglaRedondeo)}
+              disabled={precioManual}
               className="input"
             >
               <option value="sin_redondeo">Sin redondeo</option>
@@ -264,6 +278,51 @@ export function FormArticulo({
               <option value="a_la_decena">A la decena</option>
             </select>
           </Campo>
+
+          {/* --- Precio fijado a mano --- */}
+          <div className="pt-4 border-t border-tiza/40 space-y-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                name="precioManual"
+                checked={precioManual}
+                onChange={(e) => {
+                  setPrecioManual(e.target.checked);
+                  // Al activarlo, arrancar desde el precio calculado
+                  if (e.target.checked && !precioFijo) {
+                    setPrecioFijo(calculado.precioFinal);
+                  }
+                }}
+                className="accent-verde-esmalte"
+              />
+              <span className="text-sm">Fijar el precio de venta a mano</span>
+            </label>
+
+            {precioManual && (
+              <>
+                <Campo
+                  label="Precio de venta"
+                  error={campoError(estado, 'precioFijo')}
+                >
+                  <input
+                    name="precioFijo"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={precioFijo}
+                    onChange={(e) => setPrecioFijo(Number(e.target.value))}
+                    className="input num text-right text-lg"
+                  />
+                </Campo>
+
+                <p className="text-xs text-ambar-dial">
+                  Este precio no se recalcula cuando sube el costo, ni siquiera
+                  en un ajuste masivo. Revisalo cada tanto para que el margen no
+                  se achique sin que lo notes.
+                </p>
+              </>
+            )}
+          </div>
         </section>
 
         {/* --- Stock --- */}
@@ -307,7 +366,7 @@ export function FormArticulo({
           Columna 2 · Panel lateral
           ============================================================ */}
       <aside className="space-y-3 lg:sticky lg:top-20">
-        {/* Precio calculado */}
+        {/* Precio */}
         <div className="bg-verde-esmalte rounded-lg overflow-hidden shadow-lg">
           <div
             className={`h-1 ${margenBajo ? 'bg-rojo-plomo' : 'bg-verde-claro/40'}`}
@@ -315,34 +374,41 @@ export function FormArticulo({
 
           <div className="p-5 space-y-3">
             <div className="text-[0.65rem] uppercase tracking-[0.18em] text-tiza/70">
-              Precio calculado
+              {precioManual ? 'Precio fijado' : 'Precio calculado'}
             </div>
 
-            <dl className="num text-sm space-y-1.5 text-tiza">
-              <Fila etiqueta="Costo" valor={formatearPrecio(costo)} />
-              <Fila
-                etiqueta={
-                  margenTipo === 'porcentaje'
-                    ? `+ ${margenValor}%`
-                    : `+ $${margenValor}`
-                }
-                valor={formatearPrecio(precio.precioBase - costo)}
-              />
-              <Fila
-                etiqueta="Redondeo"
-                valor={`${precio.redondeoAplicado >= 0 ? '+' : ''}${formatearPrecio(
-                  precio.redondeoAplicado,
-                )}`}
-              />
-            </dl>
+            {precioManual ? (
+              <p className="text-xs text-tiza/70">
+                Ingresado a mano. El costo y el margen quedan como referencia.
+              </p>
+            ) : (
+              <dl className="num text-sm space-y-1.5 text-tiza">
+                <Fila etiqueta="Costo" valor={formatearPrecio(costo)} />
+                <Fila
+                  etiqueta={
+                    margenTipo === 'porcentaje'
+                      ? `+ ${margenValor}%`
+                      : `+ $${margenValor}`
+                  }
+                  valor={formatearPrecio(calculado.precioBase - costo)}
+                />
+                <Fila
+                  etiqueta="Redondeo"
+                  valor={`${calculado.redondeoAplicado >= 0 ? '+' : ''}${formatearPrecio(
+                    calculado.redondeoAplicado,
+                  )}`}
+                />
+              </dl>
+            )}
 
             <div className="border-t border-white/15 pt-3">
               <div className="flex items-baseline justify-between">
                 <span className="text-xs text-tiza/70">Precio de venta</span>
                 <span className="num text-2xl font-bold text-white">
-                  {formatearPrecio(precio.precioFinal)}
+                  {formatearPrecio(precioMostrado)}
                 </span>
               </div>
+
               <p
                 className={`num text-xs mt-1 text-right ${
                   margenBajo ? 'text-ambar-dial' : 'text-tiza/60'
@@ -355,7 +421,8 @@ export function FormArticulo({
         </div>
 
         {estado.error && !estado.campo && (
-          <p className="text-sm text-rojo-plomo bg-mostrador rounded-lg ring-1 ring-rojo-plomo/30 px-4 py-3">
+          <p className="text-sm text-rojo-plomo bg-mostrador rounded-lg
+                        ring-1 ring-rojo-plomo/30 px-4 py-3">
             {estado.error}
           </p>
         )}
@@ -396,7 +463,7 @@ export function FormArticulo({
       </aside>
 
       {/* ============================================================
-          Fila 2 · Proveedores (ocupa la columna del formulario)
+          Fila 2 · Proveedores
           Va fuera del <form> porque tiene sus propias acciones.
           ============================================================ */}
       {articulo && (
@@ -499,6 +566,7 @@ function AjusteStock({
         >
           Cancelar
         </button>
+
         <button
           type="button"
           disabled={pendiente || razon.trim().length < 3}

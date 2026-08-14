@@ -18,6 +18,7 @@ const esquema = z.object({
   descripcion: z.string().trim().optional(),
   categoriaId: z.string().uuid().optional().or(z.literal('')),
   unidad: z.enum(['unidad', 'kg', 'litro', 'metro']),
+
   costoUnitario: z.coerce.number().min(0, 'El costo no puede ser negativo'),
   margenTipo: z.enum(['porcentaje', 'importe']),
   margenValor: z.coerce.number(),
@@ -27,6 +28,11 @@ const esquema = z.object({
     'al_cincuenta',
     'a_la_decena',
   ]),
+
+  // Precio fijado a mano: si viene, manda sobre el cálculo
+  precioManual: z.coerce.boolean().optional(),
+  precioFijo: z.coerce.number().min(0).optional(),
+
   stockMinimo: z.coerce.number().min(0),
   stockMaximo: z.coerce.number().min(0).optional(),
   proveedorId: z.string().uuid().optional().or(z.literal('')),
@@ -55,18 +61,32 @@ export async function guardarArticulo(
 
   const d = parsed.data;
 
-  // El precio lo calcula el servidor, no se toma del formulario:
-  // el cliente solo muestra una previsualización.
-  const precio = calcularPrecio({
-    costoUnitario: d.costoUnitario,
-    margenTipo: d.margenTipo,
-    margenValor: d.margenValor,
-    reglaRedondeo: d.reglaRedondeo,
-  });
+  // El precio lo resuelve el servidor: el navegador solo previsualiza.
+  // Si se fijó a mano, ese valor manda y no se recalcula nunca más
+  // desde el costo (ni acá ni en los ajustes masivos).
+  const usarManual = !!d.precioManual && !!d.precioFijo && d.precioFijo > 0;
 
+  const precio = usarManual
+    ? {
+        precioBase: d.precioFijo!,
+        redondeoAplicado: 0,
+        precioFinal: d.precioFijo!,
+      }
+    : calcularPrecio({
+        costoUnitario: d.costoUnitario,
+        margenTipo: d.margenTipo,
+        margenValor: d.margenValor,
+        reglaRedondeo: d.reglaRedondeo,
+      });
+
+  // La validación aplica igual con precio manual: fijarlo es una decisión,
+  // no una excusa para vender a pérdida sin verlo.
   const validacion = validarPrecio(d.costoUnitario, precio.precioFinal);
   if (!validacion.valido) {
-    return { error: validacion.razon, campo: 'margenValor' };
+    return {
+      error: validacion.razon,
+      campo: usarManual ? 'precioFijo' : 'margenValor',
+    };
   }
 
   const supabase = await createClient();
@@ -86,6 +106,7 @@ export async function guardarArticulo(
     precio_venta_base: precio.precioBase,
     redondeo_aplicado: precio.redondeoAplicado,
     precio_venta_final: precio.precioFinal,
+    precio_manual: usarManual,
     stock_minimo: d.stockMinimo,
     stock_maximo: d.stockMaximo || null,
   };
@@ -135,7 +156,7 @@ export async function alternarActivoArticulo(id: string, activo: boolean) {
 
 /**
  * Ajuste manual de stock, para conteos físicos o correcciones.
- * Queda registrado en historial_stock con el motivo.
+ * Queda registrado en historial_stock con el motivo y el usuario.
  */
 export async function ajustarStock(
   articuloId: string,
@@ -178,7 +199,8 @@ export async function ajustarStock(
 
   if (error) return { error: error.message };
 
-  // Dejar rastro del ajuste
+  // Dejar rastro: dentro de tres meses esto es lo único que permite
+  // reconstruir por qué el stock no cuadra.
   await supabase.from('historial_stock').insert({
     articulo_id: articuloId,
     sucursal_id: sesion.sucursalId,
@@ -191,6 +213,7 @@ export async function ajustarStock(
 
   revalidatePath('/articulos');
   revalidatePath(`/articulos/${articuloId}`);
+  revalidatePath('/reportes/faltantes');
   return {};
 }
 
@@ -219,5 +242,62 @@ export async function crearCategoria(nombre: string): Promise<EstadoForm> {
   }
 
   revalidatePath('/articulos');
+  return {};
+}
+
+// ====================================================================
+// Precio manual
+// ====================================================================
+
+/**
+ * Saca la marca de precio manual: el artículo vuelve a calcular
+ * su precio desde el costo y el margen.
+ */
+export async function liberarPrecioManual(
+  articuloId: string,
+): Promise<EstadoForm> {
+  const sesion = await getSesion();
+  if (!puedeEditarCatalogo(sesion.rol)) {
+    return { error: 'No tenés permisos' };
+  }
+
+  const supabase = await createClient();
+
+  const { data: articulo } = await supabase
+    .from('articulos')
+    .select('costo_unitario, margen_tipo, margen_valor')
+    .eq('id', articuloId)
+    .maybeSingle();
+
+  if (!articulo) return { error: 'Artículo no encontrado' };
+
+  const { data: sucursal } = await supabase
+    .from('sucursales')
+    .select('regla_redondeo')
+    .eq('id', sesion.sucursalId)
+    .maybeSingle();
+
+  const precio = calcularPrecio({
+    costoUnitario: Number(articulo.costo_unitario),
+    margenTipo: articulo.margen_tipo,
+    margenValor: Number(articulo.margen_valor),
+    reglaRedondeo: sucursal?.regla_redondeo ?? 'al_peso',
+  });
+
+  const { error } = await supabase
+    .from('articulos')
+    .update({
+      precio_manual: false,
+      precio_venta_base: precio.precioBase,
+      redondeo_aplicado: precio.redondeoAplicado,
+      precio_venta_final: precio.precioFinal,
+    })
+    .eq('id', articuloId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/articulos');
+  revalidatePath(`/articulos/${articuloId}`);
+  revalidatePath('/reportes/precios-fijos');
   return {};
 }
