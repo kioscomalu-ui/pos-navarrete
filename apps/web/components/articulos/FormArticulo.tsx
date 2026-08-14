@@ -98,6 +98,11 @@ export function FormArticulo({
 
   const margenBajo = margenReal.porcentaje < 10;
 
+  /** Los campos del cálculo se atenúan con precio manual, pero NUNCA
+   *  se deshabilitan: un campo disabled no se envía con el formulario
+   *  y la validación del servidor falla. */
+  const atenuado = precioManual ? 'opacity-50' : '';
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
 
@@ -239,8 +244,7 @@ export function FormArticulo({
                 name="margenTipo"
                 value={margenTipo}
                 onChange={(e) => setMargenTipo(e.target.value as MargenTipo)}
-                disabled={precioManual}
-                className="input"
+                className={`input ${atenuado}`}
               >
                 <option value="porcentaje">Porcentaje</option>
                 <option value="importe">Importe fijo</option>
@@ -257,9 +261,8 @@ export function FormArticulo({
                 step="0.01"
                 value={margenValor}
                 onChange={(e) => setMargenValor(Number(e.target.value))}
-                disabled={precioManual}
                 required
-                className="input num text-right"
+                className={`input num text-right ${atenuado}`}
               />
             </Campo>
           </div>
@@ -269,8 +272,7 @@ export function FormArticulo({
               name="reglaRedondeo"
               value={regla}
               onChange={(e) => setRegla(e.target.value as ReglaRedondeo)}
-              disabled={precioManual}
-              className="input"
+              className={`input ${atenuado}`}
             >
               <option value="sin_redondeo">Sin redondeo</option>
               <option value="al_peso">Al peso entero</option>
@@ -281,8 +283,7 @@ export function FormArticulo({
 
           {/* --- Precio fijado a mano --- */}
           <div className="pt-4 border-t border-tiza/40 space-y-3">
-            {/* Campo oculto: manda el valor explícito, sin depender
-                de cómo el navegador serializa un checkbox */}
+            {/* El valor viaja por acá: un checkbox destildado no manda nada */}
             <input
               type="hidden"
               name="precioManual"
@@ -323,7 +324,8 @@ export function FormArticulo({
 
                 <p className="text-xs text-ambar-dial">
                   Este precio no se recalcula cuando sube el costo, ni siquiera
-                  en un ajuste masivo.
+                  en un ajuste masivo. El costo y el margen quedan como
+                  referencia.
                 </p>
               </>
             )}
@@ -371,7 +373,6 @@ export function FormArticulo({
           Columna 2 · Panel lateral
           ============================================================ */}
       <aside className="space-y-3 lg:sticky lg:top-20">
-        {/* Precio */}
         <div className="bg-verde-esmalte rounded-lg overflow-hidden shadow-lg">
           <div
             className={`h-1 ${margenBajo ? 'bg-rojo-plomo' : 'bg-verde-claro/40'}`}
@@ -469,7 +470,7 @@ export function FormArticulo({
 
       {/* ============================================================
           Fila 2 · Proveedores
-          Va fuera del <form> porque tiene sus propias acciones.
+          Fuera del <form> porque tiene sus propias acciones.
           ============================================================ */}
       {articulo && (
         <div className="lg:col-start-1 lg:row-start-2">

@@ -28,6 +28,10 @@ export async function crearUsuario(
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const d = parsed.data;
+
+  console.log('[articulo] crudo:', formData.get('precioManual'));
+  console.log('[articulo] parseado:', d.precioManual, '| precioFijo:', d.precioFijo);
+  
   const admin = createAdminClient();
 
   // 1. Crear en Auth
