@@ -34,7 +34,7 @@ export interface ResultadoImportacion {
   error?: string;
 }
 
-/** Tamaño del lote: más grande satura la conexión, más chico es lento */
+/** Filas por operación contra la base */
 const LOTE = 300;
 
 // ====================================================================
@@ -130,19 +130,22 @@ export async function importarArticulos(
       activo: true,
     }));
 
-    // Los que tienen código de barras se pueden reconocer por él.
-    // Los que no, siempre entran como nuevos.
+    // Con código de barras se pueden reconocer los repetidos.
+    // Sin él, siempre entran como nuevos.
     const conCodigo = lote.filter((a) => a.codigo_barras);
     const sinCodigo = lote.filter((a) => !a.codigo_barras);
 
     if (conCodigo.length > 0) {
-      const { data, error } =
-        modo === 'actualizar'
-          ? await supabase
-              .from('articulos')
-              .upsert(conCodigo, { onConflict: 'codigo_barras' })
-              .select('id')
-          : await supabase.from('articulos').insert(conCodigo).select('id');
+      // En los dos modos se usa upsert sobre codigo_barras.
+      // La diferencia es qué pasa con los que ya existen:
+      // 'actualizar' los pisa, 'crear' los saltea sin tirar error.
+      const { data, error } = await supabase
+        .from('articulos')
+        .upsert(conCodigo, {
+          onConflict: 'codigo_barras',
+          ignoreDuplicates: modo === 'crear',
+        })
+        .select('id');
 
       if (error) {
         return {
@@ -180,7 +183,7 @@ export async function importarArticulos(
   // ------------------------------------------------------------------
   // 3. Stock inicial en la sucursal del usuario
   //    Solo para los que tienen código: sin él no hay forma confiable
-  //    de saber cuál de los recién creados es cuál.
+  //    de identificar cuál de los recién creados es cuál.
   // ------------------------------------------------------------------
   let conStock = 0;
   const filasConStock = filas.filter(
@@ -191,7 +194,7 @@ export async function importarArticulos(
     const codigos = filasConStock.map((f) => f.codigoBarras!);
     const mapaIds = new Map<string, string>();
 
-    // Buscar los ids también por lotes: un IN con 3000 valores falla
+    // También por lotes: un IN con miles de valores falla
     for (let i = 0; i < codigos.length; i += LOTE) {
       const { data } = await supabase
         .from('articulos')

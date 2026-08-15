@@ -18,6 +18,13 @@ interface Props {
   nombreSucursal: string;
 }
 
+/**
+ * Filas por llamada al servidor. Las Server Actions de Next cortan
+ * el cuerpo del pedido en 1 MB; con 200 filas cada tanda pesa unos
+ * 40 kB y nunca se acerca al límite.
+ */
+const TANDA = 200;
+
 export function ImportadorCSV({
   codigosExistentes,
   categoriasExistentes,
@@ -31,8 +38,15 @@ export function ImportadorCSV({
   const [modo, setModo] = useState<'crear' | 'actualizar'>('crear');
   const [mensaje, setMensaje] = useState('');
   const [error, setError] = useState('');
+  const [progreso, setProgreso] = useState<{
+    hechas: number;
+    total: number;
+  } | null>(null);
   const [pendiente, startTransition] = useTransition();
 
+  // ------------------------------------------------------------------
+  // Lectura del archivo
+  // ------------------------------------------------------------------
   async function onArchivo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -40,6 +54,7 @@ export function ImportadorCSV({
     setNombreArchivo(file.name);
     setMensaje('');
     setError('');
+    setProgreso(null);
 
     try {
       const texto = await file.text();
@@ -57,44 +72,86 @@ export function ImportadorCSV({
     }
   }
 
+  // ------------------------------------------------------------------
+  // Importación por tandas
+  // ------------------------------------------------------------------
   function confirmar() {
     if (!resultado) return;
 
-    const validas = resultado.filas.filter((f) => f.errores.length === 0);
+   const validas = resultado.filas.filter(
+      (f) =>
+        f.errores.length === 0 &&
+        // En modo "omitir", no mandar las que ya están
+        (modo === 'actualizar' || !f.existeEnBase),
+    );
+    setError('');
+    setMensaje('');
 
     startTransition(async () => {
-      const r = await importarArticulos(
-        validas.map((f) => ({
-          codigoBarras: f.codigoBarras,
-          nombre: f.nombre,
-          categoria: f.categoria,
-          unidad: f.unidad,
-          costo: f.costo,
-          margenTipo: f.margenTipo,
-          margenValor: f.margenValor,
-          precioBase: f.precioBase,
-          redondeoAplicado: f.redondeoAplicado,
-          precioFinal: f.precioFinal,
-          precioManual: f.precioManual,
-          stockInicial: f.stockInicial,
-          stockMinimo: f.stockMinimo,
-        })),
-        modo,
-      );
+      const acumulado = {
+        creados: 0,
+        actualizados: 0,
+        categoriasCreadas: 0,
+        conStock: 0,
+      };
 
-      if (!r.ok) {
-        setError(r.error ?? 'Error desconocido durante la importación');
-        return;
+      setProgreso({ hechas: 0, total: validas.length });
+
+      for (let i = 0; i < validas.length; i += TANDA) {
+        const tanda = validas.slice(i, i + TANDA);
+
+        const r = await importarArticulos(
+          tanda.map((f) => ({
+            codigoBarras: f.codigoBarras,
+            nombre: f.nombre,
+            categoria: f.categoria,
+            unidad: f.unidad,
+            costo: f.costo,
+            margenTipo: f.margenTipo,
+            margenValor: f.margenValor,
+            precioBase: f.precioBase,
+            redondeoAplicado: f.redondeoAplicado,
+            precioFinal: f.precioFinal,
+            precioManual: f.precioManual,
+            stockInicial: f.stockInicial,
+            stockMinimo: f.stockMinimo,
+          })),
+          modo,
+        );
+
+        if (!r.ok) {
+          const yaEntraron = acumulado.creados + r.creados;
+          setProgreso(null);
+          setError(
+            `${r.error} · Alcanzaron a cargarse ${yaEntraron} artículos. ` +
+              'Sacá del archivo los que ya entraron y volvé a importar el resto.',
+          );
+          router.refresh();
+          return;
+        }
+
+        acumulado.creados += r.creados;
+        acumulado.actualizados += r.actualizados;
+        acumulado.categoriasCreadas += r.categoriasCreadas;
+        acumulado.conStock += r.conStock;
+
+        setProgreso({
+          hechas: Math.min(i + TANDA, validas.length),
+          total: validas.length,
+        });
       }
 
       const partes: string[] = [];
-      if (r.creados) partes.push(`${r.creados} artículos creados`);
-      if (r.actualizados) partes.push(`${r.actualizados} actualizados`);
-      if (r.categoriasCreadas)
-        partes.push(`${r.categoriasCreadas} categorías nuevas`);
-      if (r.conStock) partes.push(`${r.conStock} con stock inicial`);
+      if (acumulado.creados) partes.push(`${acumulado.creados} artículos creados`);
+      if (acumulado.actualizados)
+        partes.push(`${acumulado.actualizados} actualizados`);
+      if (acumulado.categoriasCreadas)
+        partes.push(`${acumulado.categoriasCreadas} categorías nuevas`);
+      if (acumulado.conStock)
+        partes.push(`${acumulado.conStock} con stock inicial`);
 
       setMensaje(partes.join(' · '));
+      setProgreso(null);
       setResultado(null);
       setNombreArchivo('');
       router.refresh();
@@ -102,6 +159,9 @@ export function ImportadorCSV({
   }
 
   const validas = resultado?.filas.filter((f) => f.errores.length === 0) ?? [];
+  const porcentaje = progreso
+    ? Math.round((progreso.hechas / progreso.total) * 100)
+    : 0;
 
   return (
     <div className="space-y-5">
@@ -114,10 +174,11 @@ export function ImportadorCSV({
               type="file"
               accept=".csv,text/csv"
               onChange={onArchivo}
+              disabled={pendiente}
               className="block w-full text-sm file:mr-4 file:py-2 file:px-4
                          file:rounded-lg file:border-0 file:bg-verde-esmalte
                          file:text-white file:text-sm file:cursor-pointer
-                         hover:file:bg-verde-hondo"
+                         hover:file:bg-verde-hondo disabled:opacity-50"
             />
           </label>
 
@@ -137,7 +198,7 @@ export function ImportadorCSV({
           </summary>
 
           <div className="mt-3 space-y-3">
-            <pre className="p-3 bg-papel rounded text-xs overflow-x-auto num">
+            <pre className="num p-3 bg-papel rounded text-xs overflow-x-auto">
 {PLANTILLA_CSV}
             </pre>
 
@@ -181,8 +242,31 @@ export function ImportadorCSV({
         </div>
       )}
 
+      {/* ============ Progreso ============ */}
+      {progreso && (
+        <div className="bg-mostrador rounded-lg ring-1 ring-tiza/60 p-5 space-y-3">
+          <div className="flex items-baseline justify-between text-sm">
+            <span>Importando…</span>
+            <span className="num text-verde-claro">
+              {progreso.hechas} de {progreso.total}
+            </span>
+          </div>
+
+          <div className="h-2 bg-papel rounded overflow-hidden">
+            <div
+              className="h-full bg-verde-esmalte transition-all duration-300"
+              style={{ width: `${porcentaje}%` }}
+            />
+          </div>
+
+          <p className="text-xs text-verde-claro/70">
+            No cierres esta pantalla hasta que termine.
+          </p>
+        </div>
+      )}
+
       {/* ============ Previsualización ============ */}
-      {resultado && (
+      {resultado && !progreso && (
         <>
           {/* Resumen */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -194,10 +278,7 @@ export function ImportadorCSV({
               alerta={resultado.conErrores > 0}
             />
             <Tarjeta etiqueta="Ya existen" valor={resultado.yaExisten} />
-            <Tarjeta
-              etiqueta="Precio fijo"
-              valor={resultado.conPrecioManual}
-            />
+            <Tarjeta etiqueta="Precio fijo" valor={resultado.conPrecioManual} />
           </div>
 
           {resultado.categoriasNuevas.length > 0 && (
@@ -216,7 +297,7 @@ export function ImportadorCSV({
                 están en la base
               </p>
 
-              <div className="flex flex-col sm:flex-row gap-3 text-sm">
+              <div className="flex flex-col sm:flex-row gap-4 text-sm">
                 <label className="flex items-start gap-2 cursor-pointer">
                   <input
                     type="radio"
@@ -348,9 +429,7 @@ export function ImportadorCSV({
                           </span>
                         ) : f.existeEnBase ? (
                           <span className="text-verde-claro">
-                            {modo === 'actualizar'
-                              ? 'se actualiza'
-                              : 'ya existe'}
+                            {modo === 'actualizar' ? 'se actualiza' : 'ya existe'}
                           </span>
                         ) : (
                           <span className="text-verde-claro/60">nuevo</span>
@@ -364,11 +443,14 @@ export function ImportadorCSV({
           </div>
 
           {/* Acciones */}
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center
+                          justify-between gap-4">
             <div className="text-xs text-verde-claro">
               El stock inicial se carga en {nombreSucursal}.
               {resultado.conErrores > 0 &&
                 ' Las filas con error no se importan; corregilas en el archivo y volvé a subirlo.'}
+              {validas.length > TANDA &&
+                ` Se van a enviar en ${Math.ceil(validas.length / TANDA)} tandas.`}
             </div>
 
             <div className="flex gap-2 shrink-0">
@@ -377,7 +459,9 @@ export function ImportadorCSV({
                   setResultado(null);
                   setNombreArchivo('');
                 }}
-                className="px-4 py-2.5 text-sm rounded-lg ring-1 ring-tiza/60"
+                disabled={pendiente}
+                className="px-4 py-2.5 text-sm rounded-lg ring-1 ring-tiza/60
+                           disabled:opacity-40"
               >
                 Cancelar
               </button>
