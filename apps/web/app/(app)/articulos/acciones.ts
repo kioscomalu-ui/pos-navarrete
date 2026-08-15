@@ -71,6 +71,9 @@ export async function guardarArticulo(
 
   const d = parsed.data;
 
+  console.log('[articulo] crudo:', formData.get('precioManual'));
+  console.log('[articulo] parseado:', d.precioManual, '| precioFijo:', d.precioFijo);
+
   // El precio lo resuelve el servidor: el navegador solo previsualiza.
   // Con precio manual, el valor ingresado manda y no se recalcula nunca
   // más desde el costo — ni acá ni en los ajustes masivos.
