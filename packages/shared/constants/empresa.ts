@@ -7,6 +7,8 @@
 export const EMPRESA = {
   razonSocial: 'Navarrete Elsa Graciela',
   nombreCorto: 'MALU-DOÑA ELSA',
+  nombreFantasia: 'Kiosco Malú',
+  cuit: '27228168829',
 
   // --- Completar con los datos reales ---
   cuit: '27-22816882-9',

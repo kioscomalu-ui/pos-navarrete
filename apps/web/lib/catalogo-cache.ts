@@ -2,7 +2,9 @@ import { dbLocal, type ArticuloLocal } from './db-local';
 
 /**
  * Catálogo en memoria con índices precalculados.
- * Se carga al abrir caja y no se vuelve a consultar durante la venta.
+ * Se carga al abrir caja y no se vuelve a consultar durante la venta:
+ * un Map.get() tarda menos de 1 ms, una consulta a Supabase entre
+ * 80 y 300 ms según la conexión.
  */
 class CatalogoCache {
   private porCodigoBarras = new Map<string, ArticuloLocal>();
@@ -13,7 +15,10 @@ class CatalogoCache {
 
   cargado = false;
 
-  cargar(articulos: ArticuloLocal[], stock: { articuloId: string; cantidad: number }[]) {
+  cargar(
+    articulos: ArticuloLocal[],
+    stock: { articuloId: string; cantidad: number }[],
+  ) {
     this.porCodigoBarras.clear();
     this.porCodigoInterno.clear();
     this.porId.clear();
@@ -22,10 +27,19 @@ class CatalogoCache {
 
     for (const a of articulos) {
       if (!a.activo) continue;
+
       this.porId.set(a.id, a);
       if (a.codigoBarras) this.porCodigoBarras.set(a.codigoBarras, a);
       if (a.codigoInterno) this.porCodigoInterno.set(a.codigoInterno, a);
-      this.indice.push({ texto: normalizar(a.nombre), articulo: a });
+
+      // El índice de texto incluye los códigos: así el buscador
+      // encuentra tanto por nombre como escribiendo el código.
+      this.indice.push({
+        texto: normalizar(
+          `${a.nombre} ${a.codigoBarras ?? ''} ${a.codigoInterno ?? ''}`,
+        ),
+        articulo: a,
+      });
     }
 
     for (const s of stock) this.stock.set(s.articuloId, s.cantidad);
@@ -33,18 +47,22 @@ class CatalogoCache {
     this.cargado = true;
   }
 
+  // ------------------------------------------------------------------
+  // Lectura
+  // ------------------------------------------------------------------
+
   /** Camino crítico del escáner: O(1) */
   porCodigo(codigo: string): ArticuloLocal | null {
-    return this.porCodigoBarras.get(codigo)
-        ?? this.porCodigoInterno.get(codigo)
-        ?? null;
+    const c = codigo.trim();
+    if (!c) return null;
+    return this.porCodigoBarras.get(c) ?? this.porCodigoInterno.get(c) ?? null;
   }
 
-  obtener(id: string) {
+  obtener(id: string): ArticuloLocal | null {
     return this.porId.get(id) ?? null;
   }
 
-  stockDe(articuloId: string) {
+  stockDe(articuloId: string): number {
     return this.stock.get(articuloId) ?? 0;
   }
 
@@ -52,11 +70,20 @@ class CatalogoCache {
     this.stock.set(articuloId, this.stockDe(articuloId) - cantidad);
   }
 
-  /** Prefijo primero (más relevante), después coincidencia parcial */
+  /**
+   * Búsqueda por nombre o código.
+   * Prioridad: código exacto → prefijo del nombre → coincidencia parcial.
+   */
   buscar(termino: string, limite = 10): ArticuloLocal[] {
-    const t = normalizar(termino);
-    if (t.length < 2) return [];
+    const crudo = termino.trim();
+    if (crudo.length < 2) return [];
 
+    // Un código exacto es una respuesta única: no tiene sentido
+    // mostrarlo mezclado con coincidencias parciales
+    const exacto = this.porCodigo(crudo);
+    if (exacto) return [exacto];
+
+    const t = normalizar(crudo);
     const prefijos: ArticuloLocal[] = [];
     const parciales: ArticuloLocal[] = [];
 
@@ -72,19 +99,29 @@ class CatalogoCache {
     return [...prefijos, ...parciales].slice(0, limite);
   }
 
-  get cantidad() {
+  get cantidad(): number {
     return this.porId.size;
   }
 }
 
 /** Sin acentos y en minúsculas: "azúcar" encuentra "azucar" */
 function normalizar(texto: string): string {
-  return texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return texto
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 }
 
 export const catalogo = new CatalogoCache();
 
-/** Descarga el catálogo de Supabase a la base local. Al abrir caja. */
+// ====================================================================
+// Sincronización
+// ====================================================================
+
+/**
+ * Descarga el catálogo de Supabase a la base local y lo carga en memoria.
+ * Se llama al abrir caja.
+ */
 export async function sincronizarCatalogo(
   supabase: any,
   sucursalId: string,
@@ -94,15 +131,19 @@ export async function sincronizarCatalogo(
   const [{ data: articulos }, { data: stock }] = await Promise.all([
     supabase
       .from('articulos')
-      .select('id, codigo_barras, codigo_interno, nombre, unidad, costo_unitario, precio_venta_final, activo')
+      .select(
+        'id, codigo_barras, codigo_interno, nombre, unidad, ' +
+          'costo_unitario, precio_venta_final, activo',
+      )
       .eq('activo', true),
+
     supabase
       .from('stock_sucursal')
       .select('articulo_id, cantidad_disponible')
       .eq('sucursal_id', sucursalId),
   ]);
 
-  const locales = (articulos ?? []).map((a: any) => ({
+  const locales: ArticuloLocal[] = (articulos ?? []).map((a: any) => ({
     id: a.id,
     codigoBarras: a.codigo_barras,
     codigoInterno: a.codigo_interno,
@@ -130,12 +171,16 @@ export async function sincronizarCatalogo(
   return { articulos: locales.length, ms: Math.round(performance.now() - t0) };
 }
 
-/** Carga desde la base local, sin red. Para arrancar sin internet. */
-export async function cargarCatalogoLocal() {
+/**
+ * Carga desde la base local, sin red.
+ * Permite abrir caja aunque el comercio arranque el día sin internet.
+ */
+export async function cargarCatalogoLocal(): Promise<number> {
   const [articulos, stock] = await Promise.all([
     dbLocal.articulos.toArray(),
     dbLocal.stock.toArray(),
   ]);
+
   catalogo.cargar(articulos, stock);
   return articulos.length;
 }

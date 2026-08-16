@@ -6,7 +6,7 @@ import { calcularMargen } from '@pos/shared/utils/calcular-precio';
 import { BotonPedirStock } from '@/components/chat/BotonPedirStock';
 
 const SELECT_ARTICULO = `
-  id, codigo_barras, nombre, unidad, activo,
+  id, codigo_barras, codigo_interno, nombre, unidad, activo,
   costo_unitario, precio_venta_final, stock_minimo,
   categorias_articulos(nombre),
   stock_sucursal(cantidad_disponible, sucursal_id)
@@ -17,6 +17,14 @@ interface StockFila {
   sucursal_id: string;
 }
 
+/**
+ * Escapa los caracteres que rompen el filtro .or() de PostgREST.
+ * Sin esto, un término con coma o paréntesis genera una consulta inválida.
+ */
+function limpiarTermino(q: string): string {
+  return q.trim().replace(/[,()\\]/g, ' ');
+}
+
 export default async function ArticulosPage({
   searchParams,
 }: {
@@ -24,11 +32,12 @@ export default async function ArticulosPage({
 }) {
   const { q, inactivos } = await searchParams;
   const verInactivos = inactivos === '1';
+  const termino = q ? limpiarTermino(q) : '';
 
   const sesion = await getSesion();
   const supabase = await createClient();
 
-  // --- Búsqueda por nombre ---
+  // --- Búsqueda: nombre, código de barras o código interno ---
   let query = supabase
     .from('articulos')
     .select(SELECT_ARTICULO)
@@ -36,7 +45,16 @@ export default async function ArticulosPage({
     .limit(100);
 
   if (!verInactivos) query = query.eq('activo', true);
-  if (q) query = query.ilike('nombre', `%${q}%`);
+
+  if (termino) {
+    query = query.or(
+      [
+        `nombre.ilike.%${termino}%`,
+        `codigo_barras.ilike.%${termino}%`,
+        `codigo_interno.ilike.%${termino}%`,
+      ].join(','),
+    );
+  }
 
   const { data, error } = await query;
 
@@ -44,11 +62,11 @@ export default async function ArticulosPage({
   let porCodigoProveedor = false;
 
   // --- Si no encontró nada, probar por el código que usa el proveedor.
-  //     Sirve cuando llega la factura con la nomenclatura del proveedor. ---
-  if (q && (!articulos || articulos.length === 0)) {
+  //     Sirve cuando llega la factura con su nomenclatura. ---
+  if (termino && (!articulos || articulos.length === 0)) {
     const { data: coincidencias } = await supabase.rpc(
       'buscar_por_codigo_proveedor',
-      { p_texto: q },
+      { p_texto: termino },
     );
 
     if (coincidencias && coincidencias.length > 0) {
@@ -121,7 +139,7 @@ export default async function ArticulosPage({
         <input
           name="q"
           defaultValue={q}
-          placeholder="Buscar por nombre o por código de proveedor…"
+          placeholder="Buscar por nombre o código…"
           className="input flex-1"
         />
         <button className="px-4 py-2 text-sm rounded-lg ring-1 ring-tiza/60 bg-mostrador hover:ring-verde-claro">
@@ -202,7 +220,7 @@ export default async function ArticulosPage({
                     </td>
 
                     <td className="num px-4 py-2.5 text-xs text-verde-claro">
-                      {a.codigo_barras ?? '—'}
+                      {a.codigo_barras ?? a.codigo_interno ?? '—'}
                     </td>
 
                     <td className="num px-4 py-2.5 text-right text-verde-claro">
@@ -252,7 +270,7 @@ export default async function ArticulosPage({
         {articulos?.length === 0 && (
           <p className="px-4 py-12 text-center text-sm text-verde-claro/70">
             {q
-              ? `No se encontró nada con "${q}", ni por nombre ni por código de proveedor`
+              ? `No se encontró nada con "${q}", ni por nombre ni por código`
               : 'Todavía no hay artículos cargados'}
           </p>
         )}

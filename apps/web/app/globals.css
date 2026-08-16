@@ -129,6 +129,52 @@ input[type='number'] {
     display: none !important;
   }
 
+  .remito-razon-social {
+    text-align: center;
+    font-size: 0.85em;
+    margin-bottom: 3px;
+  }
+
+.factura-tipo {
+    text-align: center;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    font-size: 1.1em;
+    padding: 2px 0;
+  }
+
+  .factura-letra {
+    display: inline-block;
+    border: 2px solid #000;
+    padding: 1px 7px;
+    margin-right: 6px;
+    font-size: 1.4em;
+    line-height: 1;
+  }
+
+  .factura-cae {
+    text-align: center;
+    font-size: 0.9em;
+    line-height: 1.4;
+  }
+
+  .factura-qr {
+    display: flex;
+    justify-content: center;
+    margin: 6px 0;
+  }
+
+  .factura-qr img {
+    width: 28mm;
+    height: 28mm;
+  }
+
+  .factura-pie {
+    text-align: center;
+    font-size: 0.8em;
+    margin-top: 4px;
+  }
+
   .remito-print,
   .remito-print * {
     display: revert !important;
