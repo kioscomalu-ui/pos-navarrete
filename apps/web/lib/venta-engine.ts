@@ -12,6 +12,14 @@ import type { MetodoPago } from '@pos/shared/types';
 export interface ItemCarrito extends ItemVentaLocal {
   /** Artículos por peso: true hasta que se ingrese la cantidad */
   requiereCantidad: boolean;
+  /**
+   * Identifica la línea dentro del carrito. Para artículos normales
+   * es el id del artículo (repetir el escaneo suma cantidad a la
+   * misma línea). Para ventas libres es un id propio por cada
+   * agregado, así dos líneas libres nunca se pisan entre sí aunque
+   * las dos apunten al mismo artículo genérico.
+   */
+  lineaId: string;
 }
 
 export interface EstadoCarrito {
@@ -57,9 +65,18 @@ export class VentaEngine {
     return { ok: true, ...this.agregar(articulo.id) };
   }
 
+  /**
+   * Agrega un artículo del catálogo. El artículo genérico de venta
+   * libre no se agrega por acá: tira error para que la pantalla abra
+   * el cuadro de descripción y precio en su lugar.
+   */
   agregar(articuloId: string): { item: ItemCarrito; nuevo: boolean } {
     const articulo = catalogo.obtener(articuloId);
     if (!articulo) throw new Error('Artículo no encontrado en el catálogo');
+
+    if (articulo.esGenerico) {
+      throw new Error('Usá "Venta libre" para cargar este tipo de artículo');
+    }
 
     const existente = this.items.get(articuloId);
     const porPeso = articulo.unidad !== 'unidad';
@@ -84,6 +101,7 @@ export class VentaEngine {
     }
 
     const item: ItemCarrito = {
+      lineaId: articulo.id,
       articuloId: articulo.id,
       nombre: articulo.nombre,
       unidad: articulo.unidad,
@@ -95,17 +113,55 @@ export class VentaEngine {
       requiereCantidad: porPeso,
     };
 
-    this.items.set(articulo.id, item);
+    this.items.set(item.lineaId, item);
     this.emitir();
     return { item, nuevo: true };
   }
 
-  setCantidad(articuloId: string, cantidad: number) {
-    const item = this.items.get(articuloId);
+  /**
+   * Agrega una línea de venta libre: descripción y precio a mano,
+   * sin pasar por el catálogo ni descontar stock de ningún lado.
+   * Cada llamada crea una línea nueva, aunque la descripción se repita.
+   */
+  agregarLibre(
+    descripcion: string,
+    precioUnitario: number,
+    cantidad = 1,
+  ): ItemCarrito {
+    const generico = catalogo.obtenerGenerico();
+    if (!generico) {
+      throw new Error('El artículo de venta libre no está configurado');
+    }
+
+    const texto = descripcion.trim() || 'Artículo varios';
+    const monto = Math.max(0, precioUnitario);
+    const cant = Math.max(0.001, cantidad);
+
+    const item: ItemCarrito = {
+      lineaId: `libre:${crypto.randomUUID()}`,
+      articuloId: generico.id,
+      nombre: texto,
+      unidad: 'unidad',
+      cantidad: cant,
+      precioUnitario: monto,
+      descuentoPorcentaje: 0,
+      subtotal: new Decimal(monto).times(cant).toDecimalPlaces(2).toNumber(),
+      costoUnitarioSnapshot: 0,
+      requiereCantidad: false,
+      esGenerico: true,
+    };
+
+    this.items.set(item.lineaId, item);
+    this.emitir();
+    return item;
+  }
+
+  setCantidad(lineaId: string, cantidad: number) {
+    const item = this.items.get(lineaId);
     if (!item) return;
 
     if (!Number.isFinite(cantidad) || cantidad <= 0) {
-      this.items.delete(articuloId);
+      this.items.delete(lineaId);
     } else {
       item.cantidad = cantidad;
       item.requiereCantidad = false;
@@ -114,8 +170,8 @@ export class VentaEngine {
     this.emitir();
   }
 
-  setDescuento(articuloId: string, porcentaje: number) {
-    const item = this.items.get(articuloId);
+  setDescuento(lineaId: string, porcentaje: number) {
+    const item = this.items.get(lineaId);
     if (!item) return;
 
     item.descuentoPorcentaje = Math.max(0, Math.min(100, porcentaje));
@@ -123,8 +179,8 @@ export class VentaEngine {
     this.emitir();
   }
 
-  quitar(articuloId: string) {
-    this.items.delete(articuloId);
+  quitar(lineaId: string) {
+    this.items.delete(lineaId);
     this.emitir();
   }
 
@@ -183,7 +239,7 @@ export class VentaEngine {
       vendedorId: this.vendedorId,
       clienteId: cliente?.id ?? null,
       clienteNombre: cliente?.nombre ?? null,
-      items: items.map(({ requiereCantidad, ...resto }) => resto),
+      items: items.map(({ requiereCantidad, lineaId, ...resto }) => resto),
       subtotal: subtotal.toDecimalPlaces(2).toNumber(),
       descuentoTotal: subtotal.minus(total).toDecimalPlaces(2).toNumber(),
       total: total.toDecimalPlaces(2).toNumber(),
@@ -199,8 +255,11 @@ export class VentaEngine {
 
     await dbLocal.ventas.put(venta);
 
-    // Descontar stock: en memoria (inmediato) y en la base local
+    // Descontar stock: en memoria (inmediato) y en la base local.
+    // Las líneas de venta libre no tienen stock que descontar.
     for (const item of items) {
+      if (item.esGenerico) continue;
+
       catalogo.descontar(item.articuloId, item.cantidad);
 
       const actual = await dbLocal.stock.get(item.articuloId);
@@ -267,7 +326,7 @@ export class VentaEngine {
   // Internos
   // ------------------------------------------------------------------
 
-  /** SUC01-20260813-000147 — contador local, sin consultar al servidor */
+  /** SUC01-20260815-000147 — contador local, sin consultar al servidor */
   private async numeroFactura(): Promise<string> {
     const hoy = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const n = await siguienteNumero(`factura:${this.codigoSucursal}:${hoy}`);

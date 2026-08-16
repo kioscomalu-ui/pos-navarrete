@@ -8,8 +8,9 @@ import { CierreCaja } from './CierreCaja';
 import { BuscadorArticulos } from './BuscadorArticulos';
 import { CobroEfectivo } from './CobroEfectivo';
 import { SelectorCliente } from './SelectorCliente';
+import { VentaLibre } from './VentaLibre';
 import { RemitoImprimible } from './RemitoImprimible';
-import { formatearPrecio, formatearImporte } from '@pos/shared/constants/empresa';
+import { formatearPrecio } from '@pos/shared/constants/empresa';
 import type { MetodoPago } from '@pos/shared/types';
 import type { VentaLocal, ClienteLocal } from '@/lib/db-local';
 
@@ -47,6 +48,7 @@ export function PantallaCaja(props: Props) {
   const [buscando, setBuscando] = useState(false);
   const [pidiendoEfectivo, setPidiendoEfectivo] = useState(false);
   const [eligiendoCliente, setEligiendoCliente] = useState(false);
+  const [ventaLibre, setVentaLibre] = useState(false);
   const [cerrando, setCerrando] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
   const [ultimaVenta, setUltimaVenta] = useState<VentaLocal | null>(null);
@@ -60,25 +62,35 @@ export function PantallaCaja(props: Props) {
   // ---- Escáner ----
   const alEscanear = useCallback(
     (codigo: string) => {
-      const r = engine.escanear(codigo);
+      try {
+        const r = engine.escanear(codigo);
 
-      if (!r.ok) {
-        mostrarAviso(`Código no encontrado: ${codigo}`);
-        return;
-      }
+        if (!r.ok) {
+          mostrarAviso(`Código no encontrado: ${codigo}`);
+          return;
+        }
 
-      const avisoStock = engine.consumirAvisoStock();
-      if (avisoStock) mostrarAviso(avisoStock);
+        const avisoStock = engine.consumirAvisoStock();
+        if (avisoStock) mostrarAviso(avisoStock);
 
-      if (r.item.requiereCantidad) {
-        setTimeout(() => inputPeso.current?.focus(), 0);
+        if (r.item.requiereCantidad) {
+          setTimeout(() => inputPeso.current?.focus(), 0);
+        }
+      } catch {
+        // El código escaneado es el del artículo genérico (000000)
+        setVentaLibre(true);
       }
     },
     [engine, mostrarAviso],
   );
 
   const hayModal =
-    buscando || pidiendoEfectivo || eligiendoCliente || cerrando || !!ultimaVenta;
+    buscando ||
+    pidiendoEfectivo ||
+    eligiendoCliente ||
+    ventaLibre ||
+    cerrando ||
+    !!ultimaVenta;
 
   useEscaner(alEscanear, listo && !!caja && !hayModal);
 
@@ -140,6 +152,7 @@ export function PantallaCaja(props: Props) {
   // ---- Atajos de teclado ----
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      // Pantalla de vuelto
       if (ultimaVenta) {
         if (e.key === 'Enter') {
           e.preventDefault();
@@ -152,7 +165,15 @@ export function PantallaCaja(props: Props) {
         return;
       }
 
-      if (pidiendoEfectivo || eligiendoCliente || buscando || cerrando || !caja) {
+      // Los modales y el arqueo manejan sus propias teclas
+      if (
+        pidiendoEfectivo ||
+        eligiendoCliente ||
+        ventaLibre ||
+        buscando ||
+        cerrando ||
+        !caja
+      ) {
         return;
       }
 
@@ -161,6 +182,7 @@ export function PantallaCaja(props: Props) {
       if (e.key === 'F3') { e.preventDefault(); cobrar('billetera'); }
       if (e.key === 'F4') { e.preventDefault(); setBuscando(true); }
       if (e.key === 'F5') { e.preventDefault(); cobrar('cuenta_corriente'); }
+      if (e.key === 'F6') { e.preventDefault(); setVentaLibre(true); }
       if (e.key === 'Escape') { e.preventDefault(); engine.limpiar(); }
       if (e.key === 'Delete') { e.preventDefault(); engine.quitarUltimo(); }
     }
@@ -174,6 +196,7 @@ export function PantallaCaja(props: Props) {
     imprimirRemito,
     pidiendoEfectivo,
     eligiendoCliente,
+    ventaLibre,
     buscando,
     cerrando,
     caja,
@@ -355,7 +378,7 @@ export function PantallaCaja(props: Props) {
               <tbody>
                 {carrito.items.map((item, i) => (
                   <tr
-                    key={item.articuloId}
+                    key={item.lineaId}
                     className={
                       item.requiereCantidad
                         ? 'renglon-pesar'
@@ -365,7 +388,14 @@ export function PantallaCaja(props: Props) {
                     }
                   >
                     <td className="px-4 py-3">
-                      <div className="font-medium">{item.nombre}</div>
+                      <div>
+                        {item.nombre}
+                        {item.esGenerico && (
+                          <span className="ml-2 text-xs text-verde-claro">
+                            venta libre
+                          </span>
+                        )}
+                      </div>
                       <div className="num text-xs text-verde-claro mt-0.5">
                         {formatearPrecio(item.precioUnitario)}
                         {item.unidad !== 'unidad' && (
@@ -389,7 +419,7 @@ export function PantallaCaja(props: Props) {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
                                 engine.setCantidad(
-                                  item.articuloId,
+                                  item.lineaId,
                                   Number(e.currentTarget.value),
                                 );
                                 e.currentTarget.blur();
@@ -403,7 +433,7 @@ export function PantallaCaja(props: Props) {
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() =>
-                              engine.setCantidad(item.articuloId, item.cantidad - 1)
+                              engine.setCantidad(item.lineaId, item.cantidad - 1)
                             }
                             className="w-7 h-7 rounded hover:bg-papel text-verde-claro text-lg leading-none"
                             aria-label={`Quitar uno de ${item.nombre}`}
@@ -417,7 +447,7 @@ export function PantallaCaja(props: Props) {
                           </span>
                           <button
                             onClick={() =>
-                              engine.setCantidad(item.articuloId, item.cantidad + 1)
+                              engine.setCantidad(item.lineaId, item.cantidad + 1)
                             }
                             className="w-7 h-7 rounded hover:bg-papel text-verde-claro text-lg leading-none"
                             aria-label={`Agregar uno de ${item.nombre}`}
@@ -434,7 +464,7 @@ export function PantallaCaja(props: Props) {
 
                     <td className="px-3 py-3 w-10">
                       <button
-                        onClick={() => engine.quitar(item.articuloId)}
+                        onClick={() => engine.quitar(item.lineaId)}
                         className="w-6 h-6 rounded text-tiza hover:text-rojo-plomo hover:bg-papel"
                         aria-label={`Quitar ${item.nombre}`}
                       >
@@ -468,7 +498,7 @@ export function PantallaCaja(props: Props) {
             <div className="flex items-baseline gap-1.5 mt-1">
               <span className="num text-2xl text-tiza/60">$</span>
               <span className="num text-5xl font-bold text-white leading-none">
-                {formatearImporte(carrito.total)}
+                {formatearPrecio(carrito.total).replace('$', '').trim()}
               </span>
             </div>
 
@@ -517,14 +547,25 @@ export function PantallaCaja(props: Props) {
           />
         </div>
 
-        <button
-          onClick={() => setBuscando(true)}
-          className="w-full py-3 text-sm rounded-lg bg-mostrador ring-1 ring-tiza/60
-                     hover:ring-verde-claro flex items-center justify-between px-4"
-        >
-          <span>Buscar artículo</span>
-          <kbd className="text-xs text-verde-claro">F4</kbd>
-        </button>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setBuscando(true)}
+            className="py-2.5 text-sm rounded-lg bg-mostrador ring-1 ring-tiza/60
+                       hover:ring-verde-claro flex items-center justify-between px-3"
+          >
+            <span>Buscar</span>
+            <kbd className="text-xs text-verde-claro">F4</kbd>
+          </button>
+
+          <button
+            onClick={() => setVentaLibre(true)}
+            className="py-2.5 text-sm rounded-lg bg-mostrador ring-1 ring-tiza/60
+                       hover:ring-verde-claro flex items-center justify-between px-3"
+          >
+            <span>Venta libre</span>
+            <kbd className="text-xs text-verde-claro">F6</kbd>
+          </button>
+        </div>
 
         <div className="flex gap-2 pt-1">
           <button
@@ -547,9 +588,13 @@ export function PantallaCaja(props: Props) {
       {buscando && (
         <BuscadorArticulos
           onElegir={(id) => {
-            engine.agregar(id);
-            const avisoStock = engine.consumirAvisoStock();
-            if (avisoStock) mostrarAviso(avisoStock);
+            try {
+              engine.agregar(id);
+              const avisoStock = engine.consumirAvisoStock();
+              if (avisoStock) mostrarAviso(avisoStock);
+            } catch {
+              setVentaLibre(true);
+            }
             setBuscando(false);
           }}
           onCerrar={() => setBuscando(false)}
@@ -574,6 +619,22 @@ export function PantallaCaja(props: Props) {
             })
           }
           onCerrar={() => setEligiendoCliente(false)}
+        />
+      )}
+
+      {ventaLibre && (
+        <VentaLibre
+          onConfirmar={(descripcion, precio, cantidad) => {
+            try {
+              engine.agregarLibre(descripcion, precio, cantidad);
+            } catch (e) {
+              mostrarAviso(
+                e instanceof Error ? e.message : 'No se pudo agregar',
+              );
+            }
+            setVentaLibre(false);
+          }}
+          onCerrar={() => setVentaLibre(false)}
         />
       )}
     </div>

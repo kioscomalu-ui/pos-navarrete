@@ -12,6 +12,7 @@ class CatalogoCache {
   private porId = new Map<string, ArticuloLocal>();
   private indice: Array<{ texto: string; articulo: ArticuloLocal }> = [];
   private stock = new Map<string, number>();
+  private generico: ArticuloLocal | null = null;
 
   cargado = false;
 
@@ -24,6 +25,7 @@ class CatalogoCache {
     this.porId.clear();
     this.stock.clear();
     this.indice = [];
+    this.generico = null;
 
     for (const a of articulos) {
       if (!a.activo) continue;
@@ -31,12 +33,16 @@ class CatalogoCache {
       this.porId.set(a.id, a);
       if (a.codigoBarras) this.porCodigoBarras.set(a.codigoBarras, a);
       if (a.codigoInterno) this.porCodigoInterno.set(a.codigoInterno, a);
+      if (a.esGenerico) this.generico = a;
 
       // El índice de texto incluye los códigos: así el buscador
       // encuentra tanto por nombre como escribiendo el código.
+      // El genérico además responde a "libre" y "varios".
       this.indice.push({
         texto: normalizar(
-          `${a.nombre} ${a.codigoBarras ?? ''} ${a.codigoInterno ?? ''}`,
+          a.esGenerico
+            ? `${a.nombre} venta libre varios otro`
+            : `${a.nombre} ${a.codigoBarras ?? ''} ${a.codigoInterno ?? ''}`,
         ),
         articulo: a,
       });
@@ -60,6 +66,11 @@ class CatalogoCache {
 
   obtener(id: string): ArticuloLocal | null {
     return this.porId.get(id) ?? null;
+  }
+
+  /** El artículo especial de venta libre (código 000000), si está cargado */
+  obtenerGenerico(): ArticuloLocal | null {
+    return this.generico;
   }
 
   stockDe(articuloId: string): number {
@@ -142,7 +153,7 @@ export async function sincronizarCatalogo(
       .from('articulos')
       .select(
         'id, codigo_barras, codigo_interno, nombre, unidad, ' +
-          'costo_unitario, precio_venta_final, activo',
+          'costo_unitario, precio_venta_final, activo, es_generico',
       )
       .eq('activo', true)
       .order('id')
@@ -181,6 +192,7 @@ export async function sincronizarCatalogo(
     costoUnitario: Number(a.costo_unitario),
     precioVentaFinal: Number(a.precio_venta_final ?? 0),
     activo: a.activo,
+    esGenerico: !!a.es_generico,
   }));
 
   const stockLocal = stockCrudo.map((s) => ({
