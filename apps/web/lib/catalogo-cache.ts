@@ -118,9 +118,16 @@ export const catalogo = new CatalogoCache();
 // Sincronización
 // ====================================================================
 
+/** Tamaño máximo de página que devuelve PostgREST por defecto */
+const TANDA = 1000;
+
 /**
  * Descarga el catálogo de Supabase a la base local y lo carga en memoria.
  * Se llama al abrir caja.
+ *
+ * PostgREST devuelve como máximo 1000 filas por consulta si no se
+ * pagina explícitamente. Con catálogos grandes hay que pedir de a
+ * tandas hasta que no queden más filas.
  */
 export async function sincronizarCatalogo(
   supabase: any,
@@ -128,22 +135,44 @@ export async function sincronizarCatalogo(
 ): Promise<{ articulos: number; ms: number }> {
   const t0 = performance.now();
 
-  const [{ data: articulos }, { data: stock }] = await Promise.all([
-    supabase
+  // --- Artículos, paginado ---
+  const articulosCrudos: any[] = [];
+  for (let desde = 0; ; desde += TANDA) {
+    const { data, error } = await supabase
       .from('articulos')
       .select(
         'id, codigo_barras, codigo_interno, nombre, unidad, ' +
           'costo_unitario, precio_venta_final, activo',
       )
-      .eq('activo', true),
+      .eq('activo', true)
+      .order('id')
+      .range(desde, desde + TANDA - 1);
 
-    supabase
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+
+    articulosCrudos.push(...data);
+    if (data.length < TANDA) break; // última tanda: no hay más
+  }
+
+  // --- Stock de la sucursal, paginado igual ---
+  const stockCrudo: any[] = [];
+  for (let desde = 0; ; desde += TANDA) {
+    const { data, error } = await supabase
       .from('stock_sucursal')
       .select('articulo_id, cantidad_disponible')
-      .eq('sucursal_id', sucursalId),
-  ]);
+      .eq('sucursal_id', sucursalId)
+      .order('articulo_id')
+      .range(desde, desde + TANDA - 1);
 
-  const locales: ArticuloLocal[] = (articulos ?? []).map((a: any) => ({
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+
+    stockCrudo.push(...data);
+    if (data.length < TANDA) break;
+  }
+
+  const locales: ArticuloLocal[] = articulosCrudos.map((a) => ({
     id: a.id,
     codigoBarras: a.codigo_barras,
     codigoInterno: a.codigo_interno,
@@ -154,7 +183,7 @@ export async function sincronizarCatalogo(
     activo: a.activo,
   }));
 
-  const stockLocal = (stock ?? []).map((s: any) => ({
+  const stockLocal = stockCrudo.map((s) => ({
     articuloId: s.articulo_id,
     cantidad: Number(s.cantidad_disponible),
   }));
