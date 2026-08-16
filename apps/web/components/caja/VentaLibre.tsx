@@ -9,14 +9,14 @@ interface Props {
 }
 
 export function VentaLibre({ onConfirmar, onCerrar }: Props) {
-  const [descripcion, setDescripcion] = useState('');
   const [precio, setPrecio] = useState('');
+  const [mostrarDetalle, setMostrarDetalle] = useState(false);
+  const [descripcion, setDescripcion] = useState('');
   const [cantidad, setCantidad] = useState('1');
-  const inputDescripcion = useRef<HTMLInputElement>(null);
   const inputPrecio = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    inputDescripcion.current?.focus();
+    inputPrecio.current?.focus();
   }, []);
 
   const monto = Number(precio.replace(',', '.')) || 0;
@@ -26,6 +26,7 @@ export function VentaLibre({ onConfirmar, onCerrar }: Props) {
 
   function confirmar() {
     if (!valido) return;
+    // Sin descripción, el nombre por defecto lo pone el motor
     onConfirmar(descripcion, monto, cant);
   }
 
@@ -45,60 +46,71 @@ export function VentaLibre({ onConfirmar, onCerrar }: Props) {
           </p>
         </div>
 
+        {/* El campo que importa: precio, con foco directo */}
         <label className="block">
-          <span className="block text-xs text-verde-claro mb-1">
-            Qué es (opcional)
-          </span>
+          <span className="block text-xs text-verde-claro mb-1">Precio</span>
           <input
-            ref={inputDescripcion}
-            value={descripcion}
-            onChange={(e) => setDescripcion(e.target.value)}
+            ref={inputPrecio}
+            value={precio}
+            onChange={(e) => setPrecio(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') inputPrecio.current?.focus();
+              if (e.key === 'Enter') confirmar();
               if (e.key === 'Escape') onCerrar();
             }}
-            placeholder="Artículo varios"
-            className="input"
+            inputMode="decimal"
+            placeholder="0,00"
+            className="input num text-right text-3xl py-3"
           />
         </label>
 
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="block text-xs text-verde-claro mb-1">Precio</span>
-            <input
-              ref={inputPrecio}
-              value={precio}
-              onChange={(e) => setPrecio(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') confirmar();
-                if (e.key === 'Escape') onCerrar();
-              }}
-              inputMode="decimal"
-              placeholder="0,00"
-              className="input num text-right text-lg"
-            />
-          </label>
-
-          <label className="block">
-            <span className="block text-xs text-verde-claro mb-1">
-              Cantidad
-            </span>
-            <input
-              value={cantidad}
-              onChange={(e) => setCantidad(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && confirmar()}
-              inputMode="decimal"
-              className="input num text-right text-lg"
-            />
-          </label>
-        </div>
-
-        {monto > 0 && cant > 0 && (
+        {total > 0 && (
           <div className="bg-papel rounded p-3 text-center">
-            <span className="text-xs text-verde-claro">Subtotal</span>
+            <span className="text-xs text-verde-claro">
+              {descripcion.trim() || 'Artículo varios'}
+              {cant !== 1 && ` · ${cant}`}
+            </span>
             <div className="num text-2xl font-semibold">
               {formatearPrecio(total)}
             </div>
+          </div>
+        )}
+
+        {/* Detalle opcional, oculto por defecto para no frenar la carga */}
+        {!mostrarDetalle ? (
+          <button
+            type="button"
+            onClick={() => setMostrarDetalle(true)}
+            className="text-xs text-verde-claro hover:text-verde-esmalte"
+          >
+            + agregar descripción o cambiar cantidad
+          </button>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block col-span-2">
+              <span className="block text-xs text-verde-claro mb-1">
+                Qué es
+              </span>
+              <input
+                value={descripcion}
+                onChange={(e) => setDescripcion(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && confirmar()}
+                placeholder="Artículo varios"
+                className="input"
+              />
+            </label>
+
+            <label className="block">
+              <span className="block text-xs text-verde-claro mb-1">
+                Cantidad
+              </span>
+              <input
+                value={cantidad}
+                onChange={(e) => setCantidad(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && confirmar()}
+                inputMode="decimal"
+                className="input num text-right"
+              />
+            </label>
           </div>
         )}
 
