@@ -18,10 +18,10 @@ const UMBRAL_IDENTIFICACION = 500_000;
 
 export function DatosFactura({ total, onConfirmar, onCancelar }: Props) {
   const [tipo, setTipo] = useState<'final' | 'identificado'>('final');
-  const [docTipo, setDocTipo] = useState(TIPO_DOC.DNI);
+  const [docTipo, setDocTipo] = useState<number>(TIPO_DOC.DNI);
   const [docNro, setDocNro] = useState('');
   const [nombre, setNombre] = useState('');
-  const [condIva, setCondIva] = useState(CONDICION_IVA_RECEPTOR.CONSUMIDOR_FINAL);
+  const [condIva, setCondIva] = useState<number>(CONDICION_IVA_RECEPTOR.CONSUMIDOR_FINAL);
   const input = useRef<HTMLInputElement>(null);
 
   const requiereIdentificar = total >= UMBRAL_IDENTIFICACION;

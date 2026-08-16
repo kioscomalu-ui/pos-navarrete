@@ -11,7 +11,7 @@ export const EMPRESA = {
   cuit: '27228168829',
 
   // --- Completar con los datos reales ---
-  cuit: '27-22816882-9',
+  
   domicilio: 'San Martín 1207/1213',
   localidad: 'Cipolletti, Río Negro',
   condicionIVA: 'Responsable Inscripto',        // 'Monotributo' | 'Responsable Inscripto' | ...
