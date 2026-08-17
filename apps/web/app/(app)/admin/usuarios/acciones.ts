@@ -2,8 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { createClient } from '@/lib/supabase-server';
 import { createAdminClient } from '@/lib/supabase-admin';
 import { getSesion } from '@/lib/sesion';
+
 
 const esquemaAlta = z.object({
   email: z.string().email('Email inválido'),
@@ -98,5 +100,31 @@ export async function alternarActivo(usuarioId: string, activo: boolean) {
 
   const admin = createAdminClient();
   await admin.from('usuarios').update({ activo }).eq('id', usuarioId);
+  revalidatePath('/admin/usuarios');
+}
+
+export async function otorgarSucursalAccion(usuarioId: string, sucursalId: string) {
+  const sesion = await getSesion();
+  if (sesion.rol !== 'admin') return;
+
+  const supabase = await createClient();
+  await supabase.rpc('otorgar_sucursal', {
+    p_usuario_id: usuarioId,
+    p_sucursal_id: sucursalId,
+  });
+
+  revalidatePath('/admin/usuarios');
+}
+
+export async function quitarSucursalAccion(usuarioId: string, sucursalId: string) {
+  const sesion = await getSesion();
+  if (sesion.rol !== 'admin') return;
+
+  const supabase = await createClient();
+  await supabase.rpc('quitar_sucursal', {
+    p_usuario_id: usuarioId,
+    p_sucursal_id: sucursalId,
+  });
+
   revalidatePath('/admin/usuarios');
 }

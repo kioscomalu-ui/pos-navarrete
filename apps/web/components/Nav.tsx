@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { BotonChat } from '@/components/chat/BotonChat';
+import { SelectorSucursal } from '@/components/SelectorSucursal';
 import type { RolUsuario } from '@pos/shared/types';
 
 interface Seccion {
@@ -16,10 +17,10 @@ interface Seccion {
 const SECCIONES: Seccion[] = [
   { href: '/caja', label: 'Caja' },
   { href: '/articulos', label: 'Artículos' },
+  { href: '/proveedores', label: 'Proveedores', roles: ['admin', 'gerente'] },
   { href: '/clientes', label: 'Clientes', roles: ['admin', 'gerente', 'supervisor'] },
   { href: '/cobranzas', label: 'Cobranzas', roles: ['admin', 'gerente', 'cobrador'] },
   { href: '/reportes', label: 'Reportes', roles: ['admin', 'gerente', 'supervisor'] },
-  { href: '/proveedores', label: 'Proveedores', roles: ['admin', 'gerente'] },
   { href: '/admin', label: 'Administración', roles: ['admin'] },
 ];
 
@@ -30,6 +31,7 @@ interface Props {
   rol: RolUsuario;
   sucursalId: string;
   sucursalNombre: string;
+  sucursalesAutorizadas: { id: string; nombre: string; esPrincipal: boolean }[];
 }
 
 export function Nav({
@@ -39,6 +41,7 @@ export function Nav({
   rol,
   sucursalId,
   sucursalNombre,
+  sucursalesAutorizadas,
 }: Props) {
   const pathname = usePathname();
   const router = useRouter();
@@ -89,8 +92,14 @@ export function Nav({
 
         <div className="text-right text-xs leading-tight hidden sm:block">
           <div className="font-medium text-white">{nombreCompleto}</div>
-          <div className="text-tiza/70">
-            {rol} · {sucursalNombre}
+          <div className="text-tiza/70 flex items-center justify-end gap-1.5">
+            <span>
+              {rol} · {sucursalNombre}
+            </span>
+            <SelectorSucursal
+              sucursalActual={sucursalId}
+              sucursales={sucursalesAutorizadas}
+            />
           </div>
         </div>
 
