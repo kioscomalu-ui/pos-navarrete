@@ -1,4 +1,4 @@
-const CACHE = 'navarrete-v1';
+const CACHE = 'navarrete-v3';
 
 // Al instalar, tomar el control enseguida
 self.addEventListener('install', (event) => {
