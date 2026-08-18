@@ -127,7 +127,7 @@ export function FormArticulo({
           </Campo>
 
           <div className="grid grid-cols-2 gap-4">
-            <Campo
+                        <Campo
               label="Código de barras"
               error={campoError(estado, 'codigoBarras')}
               ayuda="Con el lector conectado, escaneá el producto acá"
@@ -135,6 +135,16 @@ export function FormArticulo({
               <input
                 name="codigoBarras"
                 defaultValue={articulo?.codigo_barras ?? ''}
+                onKeyDown={(e) => {
+                  // El lector manda Enter al terminar: sin esto,
+                  // dispara el envío del formulario a medio completar
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    (e.currentTarget.closest('form') ?? document)
+                      .querySelector<HTMLInputElement>('input[name="nombre"]')
+                      ?.focus();
+                  }
+                }}
                 className="input num"
               />
             </Campo>
