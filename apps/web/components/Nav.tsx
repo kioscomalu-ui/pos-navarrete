@@ -118,9 +118,7 @@ export function Nav({
           onClick={salir}
           className="text-sm text-tiza hover:text-white whitespace-nowrap transition-colors"
         >
-          Salir
-        </button>
-
+       
           Salir
         </button>
       </div>
