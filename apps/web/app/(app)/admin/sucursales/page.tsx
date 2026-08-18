@@ -9,6 +9,7 @@ const REDONDEOS: Record<string, string> = {
   al_peso: 'Al peso entero',
   al_cincuenta: 'A .00 o .50',
   a_la_decena: 'A la decena',
+  a_la_centena: 'A la centena',
 };
 
 export default async function SucursalesPage() {

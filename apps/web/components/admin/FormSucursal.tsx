@@ -14,6 +14,7 @@ const REDONDEOS: { valor: ReglaRedondeo; label: string; ejemplo: string }[] = [
   { valor: 'al_peso', label: 'Al peso entero', ejemplo: '3.617' },
   { valor: 'al_cincuenta', label: 'A .00 o .50', ejemplo: '3.617,50' },
   { valor: 'a_la_decena', label: 'A la decena', ejemplo: '3.620' },
+  { valor: 'a_la_centena', label: 'A la centena', ejemplo: '3.600' },
 ];
 
 interface Sucursal {

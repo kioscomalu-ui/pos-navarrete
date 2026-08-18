@@ -42,6 +42,8 @@ function aplicarRedondeo(precio: Decimal, regla: ReglaRedondeo): Decimal {
       return precio.times(2).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).div(2);
     case 'a_la_decena':
       return precio.div(10).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).times(10);
+    case 'a_la_centena':
+      return precio.div(100).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).times(100);
   }
 }
 
@@ -64,9 +66,12 @@ export function validarPrecio(costo: number, precio: number, margenMinimo = 5) {
   if (precio <= costo) {
     return { valido: false, razon: 'El precio no puede ser menor o igual al costo' };
   }
+
   const { porcentaje } = calcularMargen(costo, precio);
+
   if (porcentaje < margenMinimo) {
     return { valido: false, razon: `Margen bajo: ${porcentaje}% (mínimo ${margenMinimo}%)` };
   }
+
   return { valido: true as const };
 }

@@ -288,6 +288,7 @@ export function FormArticulo({
               <option value="al_peso">Al peso entero</option>
               <option value="al_cincuenta">A .00 o .50</option>
               <option value="a_la_decena">A la decena</option>
+              <option value="a_la_centena">A la centena</option>
             </select>
           </Campo>
 

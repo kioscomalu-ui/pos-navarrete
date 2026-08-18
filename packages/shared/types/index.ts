@@ -5,7 +5,7 @@ export type MetodoPago    = 'efectivo' | 'billetera' | 'posnet' | 'mixto' | 'cue
 export type EstadoCaja    = 'abierta' | 'cerrada';
 export type UnidadMedida  = 'unidad' | 'kg' | 'litro' | 'metro';
 export type MargenTipo    = 'porcentaje' | 'importe';
-export type ReglaRedondeo = 'sin_redondeo' | 'al_peso' | 'al_cincuenta' | 'a_la_decena';
+export type ReglaRedondeo = 'sin_redondeo' | 'al_peso' | 'al_cincuenta' | 'a_la_decena' | 'a_la_centena';
 export type TipoCanal     = 'general' | 'sucursal' | 'directo';
 export type TipoMensaje   = 'texto' | 'pedido_stock' | 'aviso' | 'sistema';
 
