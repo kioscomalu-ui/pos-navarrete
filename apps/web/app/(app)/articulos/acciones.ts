@@ -37,6 +37,7 @@ const esquema = z.object({
     'al_peso',
     'al_cincuenta',
     'a_la_decena',
+    'a_la_centena',
   ]),
 
   // Precio fijado a mano: si está activo, manda sobre el cálculo

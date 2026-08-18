@@ -26,6 +26,7 @@ const esquema = z.object({
     'al_peso',
     'al_cincuenta',
     'a_la_decena',
+    'a_la_centena',
   ]),
   margenDefault: z.coerce.number().min(0).max(1000),
   umbralDiferencia: z.coerce.number().min(0),
