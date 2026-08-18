@@ -103,10 +103,6 @@ export function Nav({
           </div>
         </div>
 
-        <button
-          onClick={salir}
-          className="text-sm text-tiza hover:text-white whitespace-nowrap transition-colors"
-        >
         <Link
           href="/cuenta"
           className="text-sm text-tiza hover:text-white whitespace-nowrap transition-colors"
@@ -118,7 +114,6 @@ export function Nav({
           onClick={salir}
           className="text-sm text-tiza hover:text-white whitespace-nowrap transition-colors"
         >
-       
           Salir
         </button>
       </div>
