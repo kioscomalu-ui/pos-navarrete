@@ -9,9 +9,10 @@ import { BuscadorArticulos } from './BuscadorArticulos';
 import { CobroEfectivo } from './CobroEfectivo';
 import { SelectorCliente } from './SelectorCliente';
 import { VentaLibre } from './VentaLibre';
+import { CobroMixto } from './CobroMixto';
 import { RemitoImprimible } from './RemitoImprimible';
 import { formatearPrecio } from '@pos/shared/constants/empresa';
-import type { MetodoPago } from '@pos/shared/types';
+import type { DesglosePago } from '@/lib/venta-engine';
 import type { VentaLocal, ClienteLocal } from '@/lib/db-local';
 
 interface Props {
@@ -49,6 +50,7 @@ export function PantallaCaja(props: Props) {
   const [pidiendoEfectivo, setPidiendoEfectivo] = useState(false);
   const [eligiendoCliente, setEligiendoCliente] = useState(false);
   const [ventaLibre, setVentaLibre] = useState(false);
+  const [pagoMixto, setPagoMixto] = useState(false);
   const [cerrando, setCerrando] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
   const [ultimaVenta, setUltimaVenta] = useState<VentaLocal | null>(null);
@@ -89,6 +91,7 @@ export function PantallaCaja(props: Props) {
     pidiendoEfectivo ||
     eligiendoCliente ||
     ventaLibre ||
+    pagoMixto ||
     cerrando ||
     !!ultimaVenta;
 
@@ -97,15 +100,16 @@ export function PantallaCaja(props: Props) {
   // ---- Cobro ----
   const ejecutarCobro = useCallback(
     async (
-      metodo: MetodoPago,
-      recibido?: number,
+      pagos: DesglosePago[],
+      recibidoEfectivo?: number,
       cliente?: { id: string; nombre: string },
     ) => {
       try {
-        const venta = await engine.cobrar(metodo, recibido, cliente);
+        const venta = await engine.cobrar(pagos, recibidoEfectivo, cliente);
         setUltimaVenta(venta);
         setPidiendoEfectivo(false);
         setEligiendoCliente(false);
+        setPagoMixto(false);
       } catch (e) {
         mostrarAviso(e instanceof Error ? e.message : 'Error al cobrar');
       }
@@ -113,8 +117,9 @@ export function PantallaCaja(props: Props) {
     [engine, mostrarAviso],
   );
 
+  /** Atajo para los botones de un solo método: arma el array de un elemento */
   const cobrar = useCallback(
-    (metodo: MetodoPago) => {
+    (metodo: 'efectivo' | 'posnet' | 'billetera' | 'cuenta_corriente') => {
       if (carrito.items.length === 0) return;
       if (carrito.hayPendientes) {
         mostrarAviso('Falta ingresar el peso de un artículo');
@@ -128,7 +133,7 @@ export function PantallaCaja(props: Props) {
         setEligiendoCliente(true);
         return;
       }
-      void ejecutarCobro(metodo);
+      void ejecutarCobro([{ metodo, monto: carrito.total }]);
     },
     [carrito, ejecutarCobro, mostrarAviso],
   );
@@ -152,7 +157,6 @@ export function PantallaCaja(props: Props) {
   // ---- Atajos de teclado ----
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      // Pantalla de vuelto
       if (ultimaVenta) {
         if (e.key === 'Enter') {
           e.preventDefault();
@@ -165,11 +169,11 @@ export function PantallaCaja(props: Props) {
         return;
       }
 
-      // Los modales y el arqueo manejan sus propias teclas
       if (
         pidiendoEfectivo ||
         eligiendoCliente ||
         ventaLibre ||
+        pagoMixto ||
         buscando ||
         cerrando ||
         !caja
@@ -183,6 +187,7 @@ export function PantallaCaja(props: Props) {
       if (e.key === 'F4') { e.preventDefault(); setBuscando(true); }
       if (e.key === 'F5') { e.preventDefault(); cobrar('cuenta_corriente'); }
       if (e.key === 'F6') { e.preventDefault(); setVentaLibre(true); }
+      if (e.key === 'F7') { e.preventDefault(); setPagoMixto(true); }
       if (e.key === 'Escape') { e.preventDefault(); engine.limpiar(); }
       if (e.key === 'Delete') { e.preventDefault(); engine.quitarUltimo(); }
     }
@@ -197,6 +202,7 @@ export function PantallaCaja(props: Props) {
     pidiendoEfectivo,
     eligiendoCliente,
     ventaLibre,
+    pagoMixto,
     buscando,
     cerrando,
     caja,
@@ -252,6 +258,7 @@ export function PantallaCaja(props: Props) {
   if (ultimaVenta) {
     const hayVuelto = ultimaVenta.vuelto != null && ultimaVenta.vuelto > 0;
     const esFiado = ultimaVenta.metodoPago === 'cuenta_corriente';
+    const esMixto = ultimaVenta.metodoPago === 'mixto';
 
     return (
       <>
@@ -273,6 +280,16 @@ export function PantallaCaja(props: Props) {
                   Total {formatearPrecio(ultimaVenta.total)} · Recibido{' '}
                   {formatearPrecio(ultimaVenta.recibido ?? 0)}
                 </p>
+              )}
+
+              {esMixto && ultimaVenta.pagos && (
+                <div className="mt-4 space-y-1">
+                  {ultimaVenta.pagos.map((p) => (
+                    <p key={p.metodo} className="num text-sm text-tiza/70">
+                      {etiquetaMetodo(p.metodo)} · {formatearPrecio(p.monto)}
+                    </p>
+                  ))}
+                </div>
               )}
 
               {esFiado && ultimaVenta.clienteNombre && (
@@ -545,6 +562,12 @@ export function PantallaCaja(props: Props) {
             onClick={() => cobrar('cuenta_corriente')}
             disabled={carrito.items.length === 0}
           />
+          <BotonCobro
+            tecla="F7"
+            label="Pago combinado"
+            onClick={() => setPagoMixto(true)}
+            disabled={carrito.items.length === 0}
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-2">
@@ -604,7 +627,9 @@ export function PantallaCaja(props: Props) {
       {pidiendoEfectivo && (
         <CobroEfectivo
           total={carrito.total}
-          onConfirmar={(recibido) => ejecutarCobro('efectivo', recibido)}
+          onConfirmar={(recibido) =>
+            ejecutarCobro([{ metodo: 'efectivo', monto: carrito.total }], recibido)
+          }
           onCancelar={() => setPidiendoEfectivo(false)}
         />
       )}
@@ -613,10 +638,11 @@ export function PantallaCaja(props: Props) {
         <SelectorCliente
           total={carrito.total}
           onElegir={(cliente: ClienteLocal) =>
-            ejecutarCobro('cuenta_corriente', undefined, {
-              id: cliente.id,
-              nombre: cliente.nombre,
-            })
+            ejecutarCobro(
+              [{ metodo: 'cuenta_corriente', monto: carrito.total }],
+              undefined,
+              { id: cliente.id, nombre: cliente.nombre },
+            )
           }
           onCerrar={() => setEligiendoCliente(false)}
         />
@@ -635,6 +661,14 @@ export function PantallaCaja(props: Props) {
             setVentaLibre(false);
           }}
           onCerrar={() => setVentaLibre(false)}
+        />
+      )}
+
+      {pagoMixto && (
+        <CobroMixto
+          total={carrito.total}
+          onConfirmar={(pagos, recibido) => ejecutarCobro(pagos, recibido)}
+          onCancelar={() => setPagoMixto(false)}
         />
       )}
     </div>
@@ -671,4 +705,14 @@ function BotonCobro({
       </kbd>
     </button>
   );
+}
+
+function etiquetaMetodo(m: string): string {
+  const mapa: Record<string, string> = {
+    efectivo: 'Efectivo',
+    posnet: 'Tarjeta',
+    billetera: 'Billetera',
+    cuenta_corriente: 'Cta. corriente',
+  };
+  return mapa[m] ?? m;
 }

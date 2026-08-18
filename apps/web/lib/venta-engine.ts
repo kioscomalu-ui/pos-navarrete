@@ -7,7 +7,11 @@ import {
   type VentaLocal,
 } from './db-local';
 import { encolar } from './cola-sync';
-import type { MetodoPago } from '@pos/shared/types';
+
+export interface DesglosePago {
+  metodo: 'efectivo' | 'posnet' | 'billetera' | 'cuenta_corriente';
+  monto: number;
+}
 
 export interface ItemCarrito extends ItemVentaLocal {
   /** Artículos por peso: true hasta que se ingrese la cantidad */
@@ -90,7 +94,6 @@ export class VentaEngine {
       }
     }
 
-    // Ya estaba en el carrito
     if (existente) {
       if (!porPeso) {
         existente.cantidad += 1;
@@ -207,12 +210,18 @@ export class VentaEngine {
   // ------------------------------------------------------------------
 
   /**
-   * Cierra la venta: escribe local y encola para sincronizar.
-   * `cliente` solo se usa cuando el pago es a cuenta corriente.
+   * Cierra la venta. `pagos` es el desglose completo del cobro: una
+   * fila por método usado. Un pago simple manda un array de un solo
+   * elemento con el total; un pago combinado, varias filas que suman
+   * el total entre todas.
+   *
+   * El desglose es lo que le permite al cierre de caja distinguir
+   * cuánto entró realmente en efectivo de cuánto entró por otros
+   * medios, incluso cuando una sola venta mezcla varios.
    */
   async cobrar(
-    metodoPago: MetodoPago,
-    recibido?: number,
+    pagos: DesglosePago[],
+    recibidoEfectivo?: number,
     cliente?: ClienteVenta,
   ): Promise<VentaLocal> {
     const items = [...this.items.values()];
@@ -221,15 +230,33 @@ export class VentaEngine {
     const pendiente = items.find((i) => i.requiereCantidad || i.cantidad <= 0);
     if (pendiente) throw new Error(`Falta la cantidad de ${pendiente.nombre}`);
 
-    if (metodoPago === 'cuenta_corriente' && !cliente) {
-      throw new Error('Elegí un cliente para cargar a cuenta corriente');
+    if (pagos.length === 0) throw new Error('Falta indicar cómo se cobra');
+
+    const total = items.reduce((acc, i) => acc.plus(i.subtotal), new Decimal(0));
+    const sumaPagos = pagos.reduce(
+      (acc, p) => acc.plus(p.monto),
+      new Decimal(0),
+    );
+
+    // Tolerancia de un centavo por redondeos de punto flotante
+    if (sumaPagos.minus(total).abs().greaterThan(0.01)) {
+      throw new Error(
+        `Los pagos suman ${sumaPagos.toFixed(2)} y el total es ${total.toFixed(2)}`,
+      );
     }
 
+    const usaCuentaCorriente = pagos.some((p) => p.metodo === 'cuenta_corriente');
+    if (usaCuentaCorriente && !cliente) {
+      throw new Error('Elegí un cliente para la parte a cuenta corriente');
+    }
+
+    const metodoPago = pagos.length === 1 ? pagos[0].metodo : 'mixto';
     const subtotal = items.reduce(
       (acc, i) => acc.plus(new Decimal(i.precioUnitario).times(i.cantidad)),
       new Decimal(0),
     );
-    const total = items.reduce((acc, i) => acc.plus(i.subtotal), new Decimal(0));
+
+    const parteEfectivo = pagos.find((p) => p.metodo === 'efectivo');
 
     const venta: VentaLocal = {
       id: crypto.randomUUID(),
@@ -243,12 +270,20 @@ export class VentaEngine {
       subtotal: subtotal.toDecimalPlaces(2).toNumber(),
       descuentoTotal: subtotal.minus(total).toDecimalPlaces(2).toNumber(),
       total: total.toDecimalPlaces(2).toNumber(),
-      recibido: recibido ?? null,
+      recibido: recibidoEfectivo ?? null,
+      // El vuelto sale de comparar lo recibido contra la PARTE en
+      // efectivo, no contra el total: si paga $2.000 efectivo + $3.000
+      // tarjeta de un total de $4.500, el vuelto se calcula sobre esos
+      // $2.000, no sobre los $4.500 completos.
       vuelto:
-        recibido != null
-          ? new Decimal(recibido).minus(total).toDecimalPlaces(2).toNumber()
+        recibidoEfectivo != null
+          ? new Decimal(recibidoEfectivo)
+              .minus(parteEfectivo?.monto ?? 0)
+              .toDecimalPlaces(2)
+              .toNumber()
           : null,
       metodoPago,
+      pagos,
       remitoNumero: null,
       syncedAt: null,
     };
@@ -271,15 +306,16 @@ export class VentaEngine {
       }
     }
 
-    // Venta fiada: actualizar el saldo local del cliente.
+    // Venta con parte fiada: actualizar el saldo local del cliente.
     // En el servidor lo hace el trigger; acá hace falta para que el
     // cobrador no salga a la calle con el saldo de ayer.
-    if (metodoPago === 'cuenta_corriente' && cliente) {
+    const parteCtaCte = pagos.find((p) => p.metodo === 'cuenta_corriente');
+    if (parteCtaCte && cliente) {
       const local = await dbLocal.clientes.get(cliente.id);
       if (local) {
         await dbLocal.clientes.update(cliente.id, {
           saldo: new Decimal(local.saldo)
-            .plus(venta.total)
+            .plus(parteCtaCte.monto)
             .toDecimalPlaces(2)
             .toNumber(),
         });
@@ -326,7 +362,7 @@ export class VentaEngine {
   // Internos
   // ------------------------------------------------------------------
 
-  /** SUC01-20260815-000147 — contador local, sin consultar al servidor */
+  /** SUC01-20260817-000147 — contador local, sin consultar al servidor */
   private async numeroFactura(): Promise<string> {
     const hoy = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const n = await siguienteNumero(`factura:${this.codigoSucursal}:${hoy}`);

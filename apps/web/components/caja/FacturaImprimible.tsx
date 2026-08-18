@@ -15,7 +15,7 @@ export interface DatosFacturaImpresa {
   puntoVenta: number;
   numero: number;
   cae: string;
-  caeVencimiento: string; // YYYY-MM-DD
+  caeVencimiento: string;
 
   qrDatos: string;
 
@@ -26,7 +26,6 @@ export interface DatosFacturaImpresa {
     condicionIva: number;
   };
 
-  /** Desglose por alícuota. En Factura B el IVA no se discrimina. */
   iva?: Array<{ alicuota: number; base: number; importe: number }>;
 }
 
@@ -58,6 +57,13 @@ const ETIQUETA_COND_IVA: Record<number, string> = {
   7: 'No Categorizado',
 };
 
+const ETIQUETA_METODO: Record<string, string> = {
+  efectivo: 'Efectivo',
+  posnet: 'Tarjeta',
+  billetera: 'Billetera virtual',
+  cuenta_corriente: 'Cuenta corriente',
+};
+
 export function FacturaImprimible({
   venta,
   factura,
@@ -79,8 +85,8 @@ export function FacturaImprimible({
   }, [factura.qrDatos]);
 
   const identificado = factura.receptor.docTipo !== 99;
+  const esMixto = venta.metodoPago === 'mixto';
 
-  // Solo la Factura A discrimina IVA en el comprobante
   const discriminaIva = factura.tipo === 'factura_a' && !!factura.iva?.length;
 
   const numeroFormateado =
@@ -92,7 +98,6 @@ export function FacturaImprimible({
 
   return (
     <div className="remito-print">
-      {/* ---- Encabezado ---- */}
       <div className="remito-empresa">
         {(EMPRESA.nombreFantasia || EMPRESA.razonSocial).toUpperCase()}
       </div>
@@ -114,7 +119,6 @@ export function FacturaImprimible({
 
       <hr />
 
-      {/* ---- Tipo de comprobante ---- */}
       <div className="factura-tipo">
         <span className="factura-letra">{LETRA[factura.tipo]}</span>
         <span>FACTURA</span>
@@ -122,7 +126,6 @@ export function FacturaImprimible({
 
       <hr />
 
-      {/* ---- Datos del comprobante ---- */}
       <div className="remito-meta">
         <div>
           <span>Nº</span>
@@ -144,7 +147,6 @@ export function FacturaImprimible({
 
       <hr />
 
-      {/* ---- Receptor ---- */}
       <div className="remito-meta">
         {identificado ? (
           <>
@@ -179,7 +181,6 @@ export function FacturaImprimible({
 
       <hr />
 
-      {/* ---- Items ---- */}
       <div className="remito-items">
         {venta.items.map((item, i) => (
           <div key={i} className="remito-item">
@@ -202,7 +203,6 @@ export function FacturaImprimible({
 
       <hr />
 
-      {/* ---- Descuento ---- */}
       {venta.descuentoTotal > 0 && (
         <div className="remito-meta">
           <div>
@@ -212,7 +212,6 @@ export function FacturaImprimible({
         </div>
       )}
 
-      {/* ---- Desglose de IVA: solo en Factura A ---- */}
       {discriminaIva && (
         <>
           <div className="remito-meta">
@@ -246,12 +245,26 @@ export function FacturaImprimible({
 
       <hr />
 
-      {/* ---- Forma de pago ---- */}
       <div className="remito-meta">
         <div>
           <span>Pago</span>
-          <span>{etiquetaPago(venta.metodoPago)}</span>
+          <span>
+            {esMixto
+              ? 'Combinado'
+              : (ETIQUETA_METODO[venta.metodoPago] ?? venta.metodoPago)}
+          </span>
         </div>
+
+        {esMixto &&
+          venta.pagos?.map((p) => (
+            <div key={p.metodo}>
+              <span className="remito-submetodo">
+                {ETIQUETA_METODO[p.metodo] ?? p.metodo}
+              </span>
+              <span>{formatearImporte(p.monto)}</span>
+            </div>
+          ))}
+
         {venta.recibido != null && (
           <div>
             <span>Recibido</span>
@@ -268,7 +281,6 @@ export function FacturaImprimible({
 
       <hr />
 
-      {/* ---- CAE y QR ---- */}
       <div className="factura-cae">
         <div>CAE {factura.cae}</div>
         <div>Vto. CAE {formatearFechaCorta(factura.caeVencimiento)}</div>
@@ -288,17 +300,6 @@ export function FacturaImprimible({
 }
 
 // ====================================================================
-
-function etiquetaPago(m: string): string {
-  const mapa: Record<string, string> = {
-    efectivo: 'Efectivo',
-    posnet: 'Tarjeta',
-    billetera: 'Billetera virtual',
-    mixto: 'Pago mixto',
-    cuenta_corriente: 'Cuenta corriente',
-  };
-  return mapa[m] ?? m;
-}
 
 /** "2026-09-12" → "12/09/2026" */
 function formatearFechaCorta(iso: string): string {

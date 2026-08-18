@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { UnidadMedida, MetodoPago } from '@pos/shared/types';
+import type { UnidadMedida } from '@pos/shared/types';
 
 // ====================================================================
 // Catálogo
@@ -14,7 +14,6 @@ export interface ArticuloLocal {
   costoUnitario: number;
   precioVentaFinal: number;
   activo: boolean;
-  /** El artículo especial de "venta libre": código 000000, precio a mano */
   esGenerico: boolean;
 }
 
@@ -36,17 +35,26 @@ export interface ItemVentaLocal {
   descuentoPorcentaje: number;
   subtotal: number;
   costoUnitarioSnapshot: number;
-  /** true en las líneas de venta libre: no descuentan stock */
   esGenerico?: boolean;
+}
+
+/**
+ * Una fila del desglose de pago de una venta. Toda venta guarda al
+ * menos una: una venta simple tiene un solo elemento con el total
+ * completo, una venta combinada tiene varias que suman el total.
+ */
+export interface PagoVentaLocal {
+  metodo: 'efectivo' | 'posnet' | 'billetera' | 'cuenta_corriente';
+  monto: number;
 }
 
 export interface VentaLocal {
   id: string;
   numeroFactura: string;
-  fecha: string;              // ISO — IndexedDB no indexa Date de forma confiable
+  fecha: string;
   sucursalId: string;
   vendedorId: string;
-  clienteId: string | null;        // solo si es a cuenta corriente
+  clienteId: string | null;
   clienteNombre: string | null;
   items: ItemVentaLocal[];
   subtotal: number;
@@ -54,7 +62,8 @@ export interface VentaLocal {
   total: number;
   recibido: number | null;
   vuelto: number | null;
-  metodoPago: MetodoPago;
+  metodoPago: string;
+  pagos: PagoVentaLocal[];
   remitoNumero: string | null;
   syncedAt: string | null;
 }
@@ -67,7 +76,7 @@ export interface CajaLocal {
   id: string;
   vendedorId: string;
   sucursalId: string;
-  fecha: string;                 // YYYY-MM-DD
+  fecha: string;
   estado: 'abierta' | 'cerrada';
   efectivoInicial: number;
   efectivoFinal: number | null;
@@ -148,7 +157,7 @@ export interface TareaSync {
   tipo: 'venta' | 'cobranza' | 'mensaje' | 'caja';
   payload: unknown;
   intentos: number;
-  proximoIntento: number;     // timestamp
+  proximoIntento: number;
   ultimoError: string | null;
   creadoEn: number;
 }
@@ -198,6 +207,15 @@ class DBLocal extends Dexie {
       canales: 'id, tipo',
       mensajes: 'id, canalId, createdAt, estadoLocal',
     });
+
+    // Índice compuesto para encontrar la caja del día de un vendedor
+    // en una sola consulta. No se edita la definición de versiones
+    // anteriores: Dexie exige una versión nueva para cualquier
+    // cambio de índices, o rompe el esquema de quien ya tiene la
+    // app instalada.
+    this.version(5).stores({
+      cajas: 'id, fecha, estado, vendedorId, [vendedorId+fecha]',
+    });
   }
 }
 
@@ -207,10 +225,6 @@ export const dbLocal = new DBLocal();
 // Numeración local
 // ====================================================================
 
-/**
- * Numerador local. IndexedDB no tiene incremento atómico,
- * así que se usa una transacción.
- */
 export async function siguienteNumero(clave: string): Promise<number> {
   return dbLocal.transaction('rw', dbLocal.numeradores, async () => {
     const actual = await dbLocal.numeradores.get(clave);
@@ -224,10 +238,6 @@ export async function siguienteNumero(clave: string): Promise<number> {
 // Mantenimiento
 // ====================================================================
 
-/**
- * Borra del dispositivo las ventas viejas que YA subieron al servidor.
- * Se ejecuta al abrir caja. Nunca borra lo pendiente de sincronizar.
- */
 export async function purgarLocal(diasRetencion = 45): Promise<number> {
   const corte = new Date();
   corte.setDate(corte.getDate() - diasRetencion);

@@ -19,6 +19,8 @@ interface Props {
  * Los estilos viven en globals.css, dentro del @media print.
  */
 export function RemitoImprimible({ venta, sucursal, vendedor }: Props) {
+  const esMixto = venta.metodoPago === 'mixto';
+
   return (
     <div className="remito-print">
       {/* ---- Encabezado ---- */}
@@ -121,8 +123,18 @@ export function RemitoImprimible({ venta, sucursal, vendedor }: Props) {
       <div className="remito-meta">
         <div>
           <span>Pago</span>
-          <span>{etiquetaPago(venta.metodoPago)}</span>
+          <span>{esMixto ? 'Combinado' : etiquetaPago(venta.metodoPago)}</span>
         </div>
+
+        {/* Venta mixta: una línea por cada método usado */}
+        {esMixto &&
+          venta.pagos?.map((p) => (
+            <div key={p.metodo}>
+              <span className="remito-submetodo">{etiquetaPago(p.metodo)}</span>
+              <span>{formatearImporte(p.monto)}</span>
+            </div>
+          ))}
+
         {venta.recibido != null && (
           <div>
             <span>Recibido</span>
@@ -152,7 +164,7 @@ function etiquetaPago(m: string): string {
     efectivo: 'Efectivo',
     posnet: 'Tarjeta',
     billetera: 'Billetera virtual',
-    mixto: 'Pago mixto',
+    mixto: 'Pago combinado',
     cuenta_corriente: 'Cuenta corriente',
   };
   return mapa[m] ?? m;
