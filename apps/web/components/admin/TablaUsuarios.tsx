@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useTransition } from 'react';
 import {
   cambiarRol,
@@ -15,7 +16,7 @@ interface Usuario {
   nombre: string;
   apellido: string | null;
   rol: string;
-  sucursal_id: string;
+  sucursal_principal_id: string;
   activo: boolean;
 }
 
@@ -52,12 +53,16 @@ export function TablaUsuarios({
                 className={`hover:bg-neutral-50 ${!u.activo ? 'opacity-50' : ''}`}
               >
                 <td className="px-4 py-2.5">
-                  <div>
+                  <Link
+                    href={`/admin/usuarios/${u.id}`}
+                    className="hover:underline font-medium"
+                    title="Ver detalle y gestionar sucursales adicionales"
+                  >
                     {u.nombre} {u.apellido}
-                    {soyYo && (
-                      <span className="ml-2 text-xs text-neutral-400">vos</span>
-                    )}
-                  </div>
+                  </Link>
+                  {soyYo && (
+                    <span className="ml-2 text-xs text-neutral-400">vos</span>
+                  )}
                   <div className="text-xs text-neutral-500">{u.email}</div>
                 </td>
 
@@ -65,6 +70,7 @@ export function TablaUsuarios({
                   <select
                     value={u.rol}
                     disabled={soyYo || pendiente}
+                    title={soyYo ? 'No podés cambiar tu propio rol' : undefined}
                     onChange={(e) =>
                       startTransition(() => {
                         void cambiarRol(u.id, e.target.value);
@@ -82,7 +88,7 @@ export function TablaUsuarios({
 
                 <td className="px-4 py-2.5">
                   <select
-                    value={u.sucursal_id}
+                    value={u.sucursal_principal_id}
                     disabled={pendiente}
                     onChange={(e) =>
                       startTransition(() => {
