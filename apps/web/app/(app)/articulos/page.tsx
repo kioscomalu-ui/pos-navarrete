@@ -13,6 +13,8 @@ const SELECT_ARTICULO = `
 `;
 
 const POR_PAGINA = 50;
+/** Cuántas coincidencias por código de proveedor se muestran como máximo */
+const MAX_POR_PROVEEDOR = 8;
 
 interface StockFila {
   cantidad_disponible: number;
@@ -43,7 +45,7 @@ export default async function ArticulosPage({
   const sesion = await getSesion();
   const supabase = await createClient();
 
-  // --- Búsqueda: nombre, código de barras o código interno ---
+  // --- Búsqueda principal: nombre, código de barras o código interno ---
   let query = supabase
     .from('articulos')
     .select(SELECT_ARTICULO, { count: 'exact' })
@@ -62,39 +64,46 @@ export default async function ArticulosPage({
     );
   }
 
-  const { data, error, count } = await query;
+  // --- Búsqueda por código de proveedor: corre en paralelo, siempre que
+  //     haya término — no solo cuando la de arriba no encuentra nada.
+  //     Así un artículo con coincidencia parcial de nombre no tapa a
+  //     otro que coincide exacto por el código que usa su proveedor. ---
+  const busquedaProveedor = termino
+    ? supabase.rpc('buscar_por_codigo_proveedor', { p_texto: termino })
+    : Promise.resolve({ data: null as any, error: null });
 
-  let articulos = data;
-  let total = count ?? 0;
-  let porCodigoProveedor = false;
+  const [{ data, error, count }, { data: coincidenciasProveedor }] =
+    await Promise.all([query, busquedaProveedor]);
 
-  // --- Si no encontró nada en la página 1, probar por el código
-  //     que usa el proveedor. Sirve cuando llega la factura con
-  //     su nomenclatura. ---
-  if (termino && pagina === 1 && (!articulos || articulos.length === 0)) {
-    const { data: coincidencias } = await supabase.rpc(
-      'buscar_por_codigo_proveedor',
-      { p_texto: termino },
-    );
+  const articulos = data ?? [];
+  const total = count ?? 0;
+  const totalPaginas = Math.max(1, Math.ceil(total / POR_PAGINA));
 
-    if (coincidencias && coincidencias.length > 0) {
-      const ids = coincidencias.map((r: { articulo_id: string }) => r.articulo_id);
+  // --- Combinar: traer los artículos completos de las coincidencias
+  //     por proveedor que todavía no están en la página actual ---
+  const idsYaListados = new Set(articulos.map((a) => a.id));
+  const mapaCodigoProveedor = new Map<string, string>();
 
-      const { data: encontrados, count: countProv } = await supabase
-        .from('articulos')
-        .select(SELECT_ARTICULO, { count: 'exact' })
-        .in('id', ids)
-        .order('nombre');
-
-      if (encontrados && encontrados.length > 0) {
-        articulos = encontrados;
-        total = countProv ?? encontrados.length;
-        porCodigoProveedor = true;
-      }
+  for (const c of coincidenciasProveedor ?? []) {
+    if (!idsYaListados.has(c.articulo_id)) {
+      mapaCodigoProveedor.set(c.articulo_id, c.codigo_proveedor ?? '');
     }
   }
 
-  const totalPaginas = Math.max(1, Math.ceil(total / POR_PAGINA));
+  const idsProveedor = [...mapaCodigoProveedor.keys()].slice(0, MAX_POR_PROVEEDOR);
+
+  let articulosProveedor: typeof articulos = [];
+  if (idsProveedor.length > 0) {
+    const { data: encontrados } = await supabase
+      .from('articulos')
+      .select(SELECT_ARTICULO)
+      .in('id', idsProveedor);
+
+    articulosProveedor = (encontrados ?? []).filter(
+      (a) => verInactivos || a.activo,
+    );
+  }
+
   const ctxChat = {
     usuarioId: sesion.usuarioId,
     nombreUsuario: sesion.nombre,
@@ -163,7 +172,7 @@ export default async function ArticulosPage({
         <input
           name="q"
           defaultValue={q}
-          placeholder="Buscar por nombre o código…"
+          placeholder="Buscar por nombre, código propio o de proveedor…"
           className="input flex-1"
         />
         <button className="px-4 py-2 text-sm rounded-lg ring-1 ring-tiza/60 bg-mostrador hover:ring-verde-claro">
@@ -178,12 +187,6 @@ export default async function ArticulosPage({
           </Link>
         )}
       </form>
-
-      {porCodigoProveedor && (
-        <p className="text-xs text-verde-claro bg-papel rounded px-3 py-2">
-          Encontrado por el código que usa el proveedor
-        </p>
-      )}
 
       {error && (
         <p className="text-sm text-rojo-plomo font-mono">{error.message}</p>
@@ -206,92 +209,34 @@ export default async function ArticulosPage({
             </thead>
 
             <tbody>
-              {articulos?.map((a, i) => {
-                const costo = Number(a.costo_unitario);
-                const precio = Number(a.precio_venta_final ?? 0);
-                const margen = calcularMargen(costo, precio);
+              {/* Coincidencias por código de proveedor: siempre arriba,
+                  marcadas, para que salten a la vista sin mezclarse
+                  en silencio con los resultados por nombre. */}
+              {articulosProveedor.map((a, i) => (
+                <FilaArticulo
+                  key={`prov-${a.id}`}
+                  articulo={a}
+                  index={i}
+                  sucursalId={sesion.sucursalId}
+                  ctxChat={ctxChat}
+                  codigoProveedor={mapaCodigoProveedor.get(a.id)}
+                />
+              ))}
 
-                const stock = (a.stock_sucursal as unknown as StockFila[])?.find(
-                  (s) => s.sucursal_id === sesion.sucursalId,
-                );
-                const disponible = Number(stock?.cantidad_disponible ?? 0);
-                const bajoMinimo = disponible < Number(a.stock_minimo);
-
-                return (
-                  <tr
-                    key={a.id}
-                    className={`${
-                      i % 2 === 0 ? 'renglon-impar' : 'renglon-par'
-                    } ${!a.activo ? 'opacity-50' : ''}`}
-                  >
-                    <td className="px-4 py-2.5">
-                      <Link
-                        href={`/articulos/${a.id}`}
-                        className="hover:underline"
-                      >
-                        {a.nombre}
-                      </Link>
-                      {a.unidad !== 'unidad' && (
-                        <span className="ml-2 text-xs text-verde-claro">
-                          por {a.unidad}
-                        </span>
-                      )}
-                      {!a.activo && (
-                        <span className="ml-2 text-xs text-verde-claro">
-                          dado de baja
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="num px-4 py-2.5 text-xs text-verde-claro">
-                      {a.codigo_barras ?? a.codigo_interno ?? '—'}
-                    </td>
-
-                    <td className="num px-4 py-2.5 text-right text-verde-claro">
-                      {formatearPrecio(costo)}
-                    </td>
-
-                    <td className="num px-4 py-2.5 text-right font-medium">
-                      {formatearPrecio(precio)}
-                    </td>
-
-                    <td
-                      className={`num px-4 py-2.5 text-right ${
-                        margen.porcentaje < 10
-                          ? 'text-rojo-plomo'
-                          : 'text-verde-claro'
-                      }`}
-                    >
-                      {margen.porcentaje}%
-                    </td>
-
-                    <td
-                      className={`num px-4 py-2.5 text-right ${
-                        bajoMinimo ? 'text-ambar-dial font-medium' : ''
-                      }`}
-                    >
-                      {a.unidad === 'unidad'
-                        ? disponible
-                        : disponible.toFixed(2)}
-                      <span className="text-verde-claro/60 ml-1 text-xs">
-                        {a.unidad === 'unidad' ? 'un' : a.unidad}
-                      </span>
-                    </td>
-
-                    <td className="px-4 py-2.5 text-right">
-                      <BotonPedirStock
-                        articulo={{ id: a.id, nombre: a.nombre }}
-                        ctx={ctxChat}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
+              {articulos.map((a, i) => (
+                <FilaArticulo
+                  key={a.id}
+                  articulo={a}
+                  index={articulosProveedor.length + i}
+                  sucursalId={sesion.sucursalId}
+                  ctxChat={ctxChat}
+                />
+              ))}
             </tbody>
           </table>
         </div>
 
-        {articulos?.length === 0 && (
+        {articulos.length === 0 && articulosProveedor.length === 0 && (
           <p className="px-4 py-12 text-center text-sm text-verde-claro/70">
             {q
               ? `No se encontró nada con "${q}", ni por nombre ni por código`
@@ -351,5 +296,99 @@ export default async function ArticulosPage({
         </div>
       )}
     </div>
+  );
+}
+
+// ====================================================================
+// Fila de la tabla
+// ====================================================================
+
+function FilaArticulo({
+  articulo: a,
+  index,
+  sucursalId,
+  ctxChat,
+  codigoProveedor,
+}: {
+  articulo: any;
+  index: number;
+  sucursalId: string;
+  ctxChat: { usuarioId: string; nombreUsuario: string; sucursalId: string };
+  codigoProveedor?: string;
+}) {
+  const costo = Number(a.costo_unitario);
+  const precio = Number(a.precio_venta_final ?? 0);
+  const margen = calcularMargen(costo, precio);
+
+  const stock = (a.stock_sucursal as StockFila[])?.find(
+    (s) => s.sucursal_id === sucursalId,
+  );
+  const disponible = Number(stock?.cantidad_disponible ?? 0);
+  const bajoMinimo = disponible < Number(a.stock_minimo);
+
+  return (
+    <tr
+      className={`${index % 2 === 0 ? 'renglon-impar' : 'renglon-par'} ${
+        !a.activo ? 'opacity-50' : ''
+      } ${codigoProveedor !== undefined ? 'bg-ambar-suave' : ''}`}
+    >
+      <td className="px-4 py-2.5">
+        <Link href={`/articulos/${a.id}`} className="hover:underline">
+          {a.nombre}
+        </Link>
+        {a.unidad !== 'unidad' && (
+          <span className="ml-2 text-xs text-verde-claro">por {a.unidad}</span>
+        )}
+        {!a.activo && (
+          <span className="ml-2 text-xs text-verde-claro">dado de baja</span>
+        )}
+        {codigoProveedor !== undefined && (
+          <span
+            className="ml-2 text-xs text-ambar-dial"
+            title="Coincide por el código que usa el proveedor"
+          >
+            prov. {codigoProveedor || '—'}
+          </span>
+        )}
+      </td>
+
+      <td className="num px-4 py-2.5 text-xs text-verde-claro">
+        {a.codigo_barras ?? a.codigo_interno ?? '—'}
+      </td>
+
+      <td className="num px-4 py-2.5 text-right text-verde-claro">
+        {formatearPrecio(costo)}
+      </td>
+
+      <td className="num px-4 py-2.5 text-right font-medium">
+        {formatearPrecio(precio)}
+      </td>
+
+      <td
+        className={`num px-4 py-2.5 text-right ${
+          margen.porcentaje < 10 ? 'text-rojo-plomo' : 'text-verde-claro'
+        }`}
+      >
+        {margen.porcentaje}%
+      </td>
+
+      <td
+        className={`num px-4 py-2.5 text-right ${
+          bajoMinimo ? 'text-ambar-dial font-medium' : ''
+        }`}
+      >
+        {a.unidad === 'unidad' ? disponible : disponible.toFixed(2)}
+        <span className="text-verde-claro/60 ml-1 text-xs">
+          {a.unidad === 'unidad' ? 'un' : a.unidad}
+        </span>
+      </td>
+
+      <td className="px-4 py-2.5 text-right">
+        <BotonPedirStock
+          articulo={{ id: a.id, nombre: a.nombre }}
+          ctx={ctxChat}
+        />
+      </td>
+    </tr>
   );
 }
