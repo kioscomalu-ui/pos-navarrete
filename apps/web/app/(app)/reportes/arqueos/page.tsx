@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase-server';
 import { getSesion } from '@/lib/sesion';
 import { resolverRango } from '@/lib/rangos-fecha';
@@ -19,7 +20,7 @@ interface FilaArqueo {
 export default async function ReporteArqueos({
   searchParams,
 }: {
-  searchParams: Promise<{ rango?: string; desde?: string; hasta?: string }>;
+  searchParams: Promise<{ rango?: string; desde?: string; hasta?: string; vendedor?: string }>;
 }) {
   const sp = await searchParams;
   const rango = resolverRango(sp.rango, sp.desde, sp.hasta);
@@ -32,13 +33,66 @@ export default async function ReporteArqueos({
     p_sucursal_id: sesion.rol === 'admin' ? null : sesion.sucursalId,
   });
 
-  const filas = (data ?? []) as FilaArqueo[];
+  const todas = (data ?? []) as FilaArqueo[];
+
+  // Lista de vendedores presentes en el período, para el filtro
+  const vendedores = [...new Set(todas.map((f) => f.vendedor))].sort();
+
+  const vendedorSeleccionado = sp.vendedor ?? '';
+  const filas = vendedorSeleccionado
+    ? todas.filter((f) => f.vendedor === vendedorSeleccionado)
+    : // Sin filtro: agrupadas por vendedor y luego por fecha, para que
+      // el historial de cada persona quede junto y sea fácil de leer
+      [...todas].sort((a, b) => {
+        const porVendedor = a.vendedor.localeCompare(b.vendedor, 'es');
+        return porVendedor !== 0 ? porVendedor : b.fecha.localeCompare(a.fecha);
+      });
+
   const conDiferencia = filas.filter((f) => Math.abs(Number(f.diferencia ?? 0)) > 0);
   const sumaDiferencias = filas.reduce((a, f) => a + Number(f.diferencia ?? 0), 0);
+
+  function urlConVendedor(v: string): string {
+    const params = new URLSearchParams();
+    if (sp.rango) params.set('rango', sp.rango);
+    if (sp.desde) params.set('desde', sp.desde);
+    if (sp.hasta) params.set('hasta', sp.hasta);
+    if (v) params.set('vendedor', v);
+    const qs = params.toString();
+    return qs ? `/reportes/arqueos?${qs}` : '/reportes/arqueos';
+  }
 
   return (
     <div className="space-y-6">
       <SelectorRango />
+
+      {/* --- Filtro por vendedor --- */}
+      {vendedores.length > 1 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link
+            href={urlConVendedor('')}
+            className={`px-3 py-1.5 text-xs rounded-full ${
+              !vendedorSeleccionado
+                ? 'bg-verde-esmalte text-white'
+                : 'bg-mostrador ring-1 ring-tiza/60 text-verde-claro'
+            }`}
+          >
+            Todos
+          </Link>
+          {vendedores.map((v) => (
+            <Link
+              key={v}
+              href={urlConVendedor(v)}
+              className={`px-3 py-1.5 text-xs rounded-full ${
+                vendedorSeleccionado === v
+                  ? 'bg-verde-esmalte text-white'
+                  : 'bg-mostrador ring-1 ring-tiza/60 text-verde-claro'
+              }`}
+            >
+              {v}
+            </Link>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-3">
         <Tarjeta etiqueta="Cierres" valor={String(filas.length)} />
@@ -69,7 +123,8 @@ export default async function ReporteArqueos({
                 <tr key={f.caja_id} className="hover:bg-neutral-50">
                   <td className="px-4 py-2.5">
                     {new Date(f.fecha + 'T12:00').toLocaleDateString('es-AR', {
-                      day: '2-digit', month: '2-digit',
+                      day: '2-digit',
+                      month: '2-digit',
                     })}
                     {f.estado === 'abierta' && (
                       <span className="ml-2 text-xs text-amber-600">abierta</span>
@@ -124,8 +179,14 @@ export default async function ReporteArqueos({
 }
 
 function Tarjeta({
-  etiqueta, valor, alerta,
-}: { etiqueta: string; valor: string; alerta?: boolean }) {
+  etiqueta,
+  valor,
+  alerta,
+}: {
+  etiqueta: string;
+  valor: string;
+  alerta?: boolean;
+}) {
   return (
     <div className="bg-white border border-neutral-200 rounded p-4">
       <div className="text-xs text-neutral-500">{etiqueta}</div>
