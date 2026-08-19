@@ -64,25 +64,34 @@ export function Nav({
   return (
     <header className="bg-verde-esmalte sticky top-0 z-30 shadow-sm">
       {/* ============================================================
-          Fila principal — siempre visible, en cualquier tamaño
+          Fila principal — ancho completo de la ventana, sin el
+          max-w-6xl que antes achicaba la barra y forzaba un scroll
+          horizontal feo apenas se agregaba más espaciado. El
+          contenido de abajo (<main>) sigue limitado a max-w-6xl
+          para que se lea cómodo; la barra de navegación no necesita
+          esa restricción.
           ============================================================ */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-3 sm:gap-5">
+      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 h-14 lg:h-16
+                      flex items-center gap-3 sm:gap-5 lg:gap-8">
         <Link
           href="/caja"
           className="font-black tracking-tight text-white whitespace-nowrap
-                     hover:text-tiza transition-colors"
+                     hover:text-tiza transition-colors text-base lg:text-lg"
         >
           NAVARRETE
         </Link>
 
-        {/* Secciones: fila horizontal solo en pantallas medianas o más */}
-        <nav className="hidden sm:flex gap-1 flex-1 overflow-x-auto">
+        {/* Secciones: fila horizontal solo en pantallas medianas o más.
+            Sin ancho artificial de por medio, entran cómodas incluso
+            con más padding entre ellas. */}
+        <nav className="hidden sm:flex gap-1 lg:gap-2 flex-1">
           {visibles.map((s) => (
             <Link
               key={s.href}
               href={s.href}
               aria-current={esActiva(s.href) ? 'page' : undefined}
-              className={`px-3 py-1.5 rounded text-sm whitespace-nowrap transition ${
+              className={`px-3 lg:px-4 py-1.5 lg:py-2 rounded-md text-sm
+                         whitespace-nowrap transition ${
                 esActiva(s.href)
                   ? 'bg-white/15 text-white font-medium'
                   : 'text-tiza hover:bg-white/10 hover:text-white'
@@ -96,40 +105,40 @@ export function Nav({
         {/* En celular, este espacio empuja el resto a la derecha */}
         <div className="flex-1 sm:hidden" />
 
-        <BotonChat ctx={{ usuarioId, nombreUsuario: nombre, sucursalId }} />
+        {/* Bloque de la derecha: separado del resto con un borde */}
+        <div className="flex items-center gap-4 lg:gap-6 lg:border-l lg:border-white/15 lg:pl-6 shrink-0">
+          <BotonChat ctx={{ usuarioId, nombreUsuario: nombre, sucursalId }} />
 
-        {/* Nombre, rol y sucursal: solo en pantallas grandes.
-            En celular esta info vive dentro del menú desplegable. */}
-        <div className="hidden lg:block text-right text-xs leading-tight">
-          <div className="font-medium text-white">{nombreCompleto}</div>
-          <div className="text-tiza/70 flex items-center justify-end gap-1.5">
-            <span>
-              {rol} · {sucursalNombre}
-            </span>
-            <SelectorSucursal
-              sucursalActual={sucursalId}
-              sucursales={sucursalesAutorizadas}
-            />
+          <div className="hidden lg:block text-right text-xs leading-tight">
+            <div className="font-medium text-white">{nombreCompleto}</div>
+            <div className="text-tiza/70 flex items-center justify-end gap-1.5 mt-0.5">
+              <span>
+                {rol} · {sucursalNombre}
+              </span>
+              <SelectorSucursal
+                sucursalActual={sucursalId}
+                sucursales={sucursalesAutorizadas}
+              />
+            </div>
+          </div>
+
+          <div className="hidden lg:flex items-center gap-4">
+            <Link
+              href="/cuenta"
+              className="text-sm text-tiza hover:text-white whitespace-nowrap transition-colors"
+            >
+              Mi cuenta
+            </Link>
+            <button
+              onClick={salir}
+              className="text-sm text-tiza hover:text-white whitespace-nowrap transition-colors"
+            >
+              Salir
+            </button>
           </div>
         </div>
 
-        {/* Mi cuenta / Salir: solo en pantallas grandes */}
-        <Link
-          href="/cuenta"
-          className="hidden lg:inline text-sm text-tiza hover:text-white
-                     whitespace-nowrap transition-colors"
-        >
-          Mi cuenta
-        </Link>
-        <button
-          onClick={salir}
-          className="hidden lg:inline text-sm text-tiza hover:text-white
-                     whitespace-nowrap transition-colors"
-        >
-          Salir
-        </button>
-
-        {/* Hamburguesa: solo hasta el breakpoint lg, agrupa todo lo de arriba */}
+        {/* Hamburguesa: solo hasta el breakpoint lg */}
         <button
           onClick={() => setMenuAbierto((a) => !a)}
           aria-label={menuAbierto ? 'Cerrar menú' : 'Abrir menú'}
@@ -154,9 +163,8 @@ export function Nav({
           ============================================================ */}
       {menuAbierto && (
         <div className="lg:hidden border-t border-white/10 bg-verde-hondo">
-          <div className="max-w-6xl mx-auto px-4 py-3 space-y-4">
+          <div className="px-4 py-3 space-y-4">
 
-            {/* Secciones: en celular no estaban en la fila principal */}
             <nav className="sm:hidden flex flex-col gap-1">
               {visibles.map((s) => (
                 <Link
@@ -175,8 +183,6 @@ export function Nav({
               ))}
             </nav>
 
-            {/* Identidad y sucursal: en pantallas medianas hacia abajo
-                no estaban en la fila principal (esa mostraba desde lg) */}
             <div className="lg:hidden flex items-center justify-between
                             border-t border-white/10 pt-3 sm:border-t-0 sm:pt-0">
               <div className="text-xs leading-tight">
@@ -191,7 +197,6 @@ export function Nav({
               />
             </div>
 
-            {/* Cuenta y salir */}
             <div className="flex gap-4 border-t border-white/10 pt-3 text-sm">
               <Link
                 href="/cuenta"
