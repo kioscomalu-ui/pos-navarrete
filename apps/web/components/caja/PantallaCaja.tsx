@@ -10,6 +10,7 @@ import { CobroEfectivo } from './CobroEfectivo';
 import { SelectorCliente } from './SelectorCliente';
 import { VentaLibre } from './VentaLibre';
 import { CobroMixto } from './CobroMixto';
+import { EscanerCamara } from './EscanerCamara';
 import { RemitoImprimible } from './RemitoImprimible';
 import { formatearPrecio } from '@pos/shared/constants/empresa';
 import type { DesglosePago } from '@/lib/venta-engine';
@@ -51,6 +52,7 @@ export function PantallaCaja(props: Props) {
   const [eligiendoCliente, setEligiendoCliente] = useState(false);
   const [ventaLibre, setVentaLibre] = useState(false);
   const [pagoMixto, setPagoMixto] = useState(false);
+  const [escaneando, setEscaneando] = useState(false);
   const [cerrando, setCerrando] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
   const [ultimaVenta, setUltimaVenta] = useState<VentaLocal | null>(null);
@@ -61,7 +63,7 @@ export function PantallaCaja(props: Props) {
     setTimeout(() => setAviso(''), 2500);
   }, []);
 
-  // ---- Escáner ----
+  // ---- Escáner (USB o cámara: los dos llegan acá) ----
   const alEscanear = useCallback(
     (codigo: string) => {
       try {
@@ -92,6 +94,7 @@ export function PantallaCaja(props: Props) {
     eligiendoCliente ||
     ventaLibre ||
     pagoMixto ||
+    escaneando ||
     cerrando ||
     !!ultimaVenta;
 
@@ -174,6 +177,7 @@ export function PantallaCaja(props: Props) {
         eligiendoCliente ||
         ventaLibre ||
         pagoMixto ||
+        escaneando ||
         buscando ||
         cerrando ||
         !caja
@@ -203,6 +207,7 @@ export function PantallaCaja(props: Props) {
     eligiendoCliente,
     ventaLibre,
     pagoMixto,
+    escaneando,
     buscando,
     cerrando,
     caja,
@@ -570,7 +575,7 @@ export function PantallaCaja(props: Props) {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <button
             onClick={() => setBuscando(true)}
             className="py-2.5 text-sm rounded-lg bg-mostrador ring-1 ring-tiza/60
@@ -581,11 +586,20 @@ export function PantallaCaja(props: Props) {
           </button>
 
           <button
+            onClick={() => setEscaneando(true)}
+            className="py-2.5 text-sm rounded-lg bg-mostrador ring-1 ring-tiza/60
+                       hover:ring-verde-claro flex items-center justify-center gap-1.5"
+          >
+            <span>📷</span>
+            <span>Cámara</span>
+          </button>
+
+          <button
             onClick={() => setVentaLibre(true)}
             className="py-2.5 text-sm rounded-lg bg-mostrador ring-1 ring-tiza/60
                        hover:ring-verde-claro flex items-center justify-between px-3"
           >
-            <span>Venta libre</span>
+            <span>Libre</span>
             <kbd className="text-xs text-verde-claro">F6</kbd>
           </button>
         </div>
@@ -621,6 +635,16 @@ export function PantallaCaja(props: Props) {
             setBuscando(false);
           }}
           onCerrar={() => setBuscando(false)}
+        />
+      )}
+
+      {escaneando && (
+        <EscanerCamara
+          onCodigo={(codigo) => {
+            setEscaneando(false);
+            alEscanear(codigo);
+          }}
+          onCerrar={() => setEscaneando(false)}
         />
       )}
 
