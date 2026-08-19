@@ -259,7 +259,7 @@ export async function tareasConProblemas(): Promise<TareaSync[]> {
 }
 
 /** Resetea los contadores y fuerza el envío de todo lo encolado */
-export async function reintentarTodo(): Promise<void> {
+export async function reintentarTodo(): Promise<{ enviadas: number; fallidas: number }> {
   const todas = await dbLocal.cola.toArray();
   await dbLocal.cola.bulkPut(
     todas.map((t) => ({
@@ -269,7 +269,7 @@ export async function reintentarTodo(): Promise<void> {
       ultimoError: null,
     })),
   );
-  await procesar();
+  return procesar();
 }
 
 /**

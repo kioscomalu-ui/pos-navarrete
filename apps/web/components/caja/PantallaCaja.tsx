@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCaja } from '@/hooks/useCaja';
 import { useEscaner } from '@/hooks/useEscaner';
+import { reintentarTodo } from '@/lib/cola-sync';
 import { AperturaCaja } from './AperturaCaja';
 import { CierreCaja } from './CierreCaja';
 import { BuscadorArticulos } from './BuscadorArticulos';
@@ -55,6 +56,7 @@ export function PantallaCaja(props: Props) {
   const [escaneando, setEscaneando] = useState(false);
   const [cerrando, setCerrando] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [reintentando, setReintentando] = useState(false);
   const [ultimaVenta, setUltimaVenta] = useState<VentaLocal | null>(null);
   const inputPeso = useRef<HTMLInputElement>(null);
 
@@ -62,6 +64,25 @@ export function PantallaCaja(props: Props) {
     setAviso(texto);
     setTimeout(() => setAviso(''), 2500);
   }, []);
+
+  // ---- Sincronización manual ----
+  const forzarReintento = useCallback(async () => {
+    setReintentando(true);
+    try {
+      const r = await reintentarTodo();
+      if (r.enviadas > 0) {
+        mostrarAviso(
+          `${r.enviadas} ${r.enviadas === 1 ? 'venta sincronizada' : 'ventas sincronizadas'}`,
+        );
+      } else if (r.fallidas > 0) {
+        mostrarAviso('Sigue sin poder sincronizar. Revisá la conexión.');
+      } else {
+        mostrarAviso('Todo estaba al día');
+      }
+    } finally {
+      setReintentando(false);
+    }
+  }, [mostrarAviso]);
 
   // ---- Escáner (USB o cámara: los dos llegan acá) ----
   const alEscanear = useCallback(
@@ -366,8 +387,17 @@ export function PantallaCaja(props: Props) {
               </span>
             )}
             {enCola > 0 && (
-              <span className="text-verde-claro">
-                <span className="num">{enCola}</span> por sincronizar
+              <span className="flex items-center gap-1.5">
+                <span className="text-verde-claro">
+                  <span className="num">{enCola}</span> por sincronizar
+                </span>
+                <button
+                  onClick={forzarReintento}
+                  disabled={reintentando}
+                  className="text-verde-claro underline hover:text-verde-esmalte disabled:opacity-50"
+                >
+                  {reintentando ? 'reintentando…' : 'reintentar'}
+                </button>
               </span>
             )}
           </span>
