@@ -14,6 +14,11 @@ const LOTE = 50;
 // Tipos del payload
 // ====================================================================
 
+interface PagoVenta {
+  metodo: string;
+  monto: number;
+}
+
 interface PayloadVenta {
   id: string;
   fecha: string;
@@ -28,6 +33,9 @@ interface PayloadVenta {
   recibido: number | null;
   vuelto: number | null;
   metodoPago: string;
+  /** Desglose del cobro: una fila por método usado. Faltaba acá, y
+   *  por eso el RPC nunca recibía p_pagos para armar pagos_venta. */
+  pagos: PagoVenta[];
   remitoNumero: string | null;
   items: Array<{
     articuloId: string;
@@ -161,6 +169,13 @@ async function enviar(tarea: TareaSync) {
           descuentoPorcentaje: i.descuentoPorcentaje,
           subtotal: i.subtotal,
           costoUnitarioSnapshot: i.costoUnitarioSnapshot,
+        })),
+        // Antes faltaba: sin esto, pagos_venta nunca se armaba en el
+        // servidor y el arqueo no podía separar cuánto entró por cada
+        // método en una venta combinada.
+        p_pagos: (venta.pagos ?? []).map((p) => ({
+          metodo: p.metodo,
+          monto: p.monto,
         })),
       });
 
