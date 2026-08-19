@@ -62,35 +62,37 @@ export function Nav({
   }
 
   return (
-    <header className="bg-verde-esmalte sticky top-0 z-30 shadow-sm">
+    <header className="bg-verde-esmalte sticky top-0 z-30 shadow-sm overflow-x-hidden">
       {/* ============================================================
-          Fila principal — ancho completo de la ventana, sin el
-          max-w-6xl que antes achicaba la barra y forzaba un scroll
-          horizontal feo apenas se agregaba más espaciado. El
-          contenido de abajo (<main>) sigue limitado a max-w-6xl
-          para que se lea cómodo; la barra de navegación no necesita
-          esa restricción.
+          Fila principal, ancho completo.
+          Las secciones (Caja, Artículos...) aparecen desde sm.
+          El bloque de cuenta (nombre, sucursal, chat, mi cuenta,
+          salir) recién aparece desde xl (1280px): a 1024px (lg) no
+          entraba cómodo con siete secciones + todo lo demás, y en
+          notebooks con escalado de Windows el ancho disponible en
+          píxeles CSS es menor de lo que parece por el tamaño físico
+          de la pantalla. Por debajo de xl, todo eso vive en el panel
+          de la hamburguesa.
           ============================================================ */}
-      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 h-14 lg:h-16
-                      flex items-center gap-3 sm:gap-5 lg:gap-8">
+      <div className="w-full px-4 sm:px-6 xl:px-10 h-14 xl:h-16
+                      flex items-center gap-3 sm:gap-5 xl:gap-8">
         <Link
           href="/caja"
           className="font-black tracking-tight text-white whitespace-nowrap
-                     hover:text-tiza transition-colors text-base lg:text-lg"
+                     hover:text-tiza transition-colors text-base xl:text-lg"
         >
           NAVARRETE
         </Link>
 
-        {/* Secciones: fila horizontal solo en pantallas medianas o más.
-            Sin ancho artificial de por medio, entran cómodas incluso
-            con más padding entre ellas. */}
-        <nav className="hidden sm:flex gap-1 lg:gap-2 flex-1">
+        {/* Secciones: desde sm. A este nivel es solo texto + logo +
+            hamburguesa, hay lugar de sobra para que no desborde. */}
+        <nav className="hidden sm:flex gap-1 xl:gap-2 flex-1">
           {visibles.map((s) => (
             <Link
               key={s.href}
               href={s.href}
               aria-current={esActiva(s.href) ? 'page' : undefined}
-              className={`px-3 lg:px-4 py-1.5 lg:py-2 rounded-md text-sm
+              className={`px-3 xl:px-4 py-1.5 xl:py-2 rounded-md text-sm
                          whitespace-nowrap transition ${
                 esActiva(s.href)
                   ? 'bg-white/15 text-white font-medium'
@@ -102,14 +104,15 @@ export function Nav({
           ))}
         </nav>
 
-        {/* En celular, este espacio empuja el resto a la derecha */}
+        {/* Empuja el resto a la derecha cuando las secciones no están
+            en esta fila (por debajo de sm) */}
         <div className="flex-1 sm:hidden" />
 
-        {/* Bloque de la derecha: separado del resto con un borde */}
-        <div className="flex items-center gap-4 lg:gap-6 lg:border-l lg:border-white/15 lg:pl-6 shrink-0">
-          <BotonChat ctx={{ usuarioId, nombreUsuario: nombre, sucursalId }} />
+        <BotonChat ctx={{ usuarioId, nombreUsuario: nombre, sucursalId }} />
 
-          <div className="hidden lg:block text-right text-xs leading-tight">
+        {/* Bloque de cuenta: recién desde xl */}
+        <div className="hidden xl:flex items-center gap-6 border-l border-white/15 pl-6 shrink-0">
+          <div className="text-right text-xs leading-tight">
             <div className="font-medium text-white">{nombreCompleto}</div>
             <div className="text-tiza/70 flex items-center justify-end gap-1.5 mt-0.5">
               <span>
@@ -122,7 +125,7 @@ export function Nav({
             </div>
           </div>
 
-          <div className="hidden lg:flex items-center gap-4">
+          <div className="flex items-center gap-4">
             <Link
               href="/cuenta"
               className="text-sm text-tiza hover:text-white whitespace-nowrap transition-colors"
@@ -138,12 +141,12 @@ export function Nav({
           </div>
         </div>
 
-        {/* Hamburguesa: solo hasta el breakpoint lg */}
+        {/* Hamburguesa: hasta xl */}
         <button
           onClick={() => setMenuAbierto((a) => !a)}
           aria-label={menuAbierto ? 'Cerrar menú' : 'Abrir menú'}
           aria-expanded={menuAbierto}
-          className="lg:hidden w-9 h-9 flex items-center justify-center rounded
+          className="xl:hidden w-9 h-9 flex items-center justify-center rounded
                      text-white hover:bg-white/10 transition-colors shrink-0"
         >
           {menuAbierto ? (
@@ -159,12 +162,13 @@ export function Nav({
       </div>
 
       {/* ============================================================
-          Panel desplegable — hasta el breakpoint lg
+          Panel desplegable — hasta xl
           ============================================================ */}
       {menuAbierto && (
-        <div className="lg:hidden border-t border-white/10 bg-verde-hondo">
+        <div className="xl:hidden border-t border-white/10 bg-verde-hondo">
           <div className="px-4 py-3 space-y-4">
 
+            {/* Secciones: solo si no están en la fila principal (< sm) */}
             <nav className="sm:hidden flex flex-col gap-1">
               {visibles.map((s) => (
                 <Link
@@ -183,7 +187,9 @@ export function Nav({
               ))}
             </nav>
 
-            <div className="lg:hidden flex items-center justify-between
+            {/* Identidad y sucursal: no están en la fila principal por
+                debajo de xl */}
+            <div className="flex items-center justify-between
                             border-t border-white/10 pt-3 sm:border-t-0 sm:pt-0">
               <div className="text-xs leading-tight">
                 <div className="font-medium text-white">{nombreCompleto}</div>
