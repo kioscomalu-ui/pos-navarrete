@@ -3,6 +3,8 @@ import { getSesion, puedeEditarCatalogo } from '@/lib/sesion';
 import { redirect, notFound } from 'next/navigation';
 import { FormArticulo } from '@/components/articulos/FormArticulo';
 
+export const dynamic = 'force-dynamic';
+
 export default async function EditarArticulo({
   params,
 }: {
