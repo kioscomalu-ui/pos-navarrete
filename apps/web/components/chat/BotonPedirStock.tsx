@@ -48,7 +48,7 @@ export function BotonPedirStock({ articulo, ctx }: Props) {
       <button
         onClick={() => setAbierto(true)}
         className="text-xs text-neutral-400 hover:text-neutral-900"
-        title="Pedir a otra sucursal"
+        title="Pedir mercadería"
       >
         Pedir
       </button>
