@@ -6,6 +6,10 @@
    balanzas de mostrador, el ámbar del dial esperando una lectura,
    el papel del envoltorio.
    ============================================================ */
+html, body {
+  overflow-x: hidden;
+}
+
 
 @theme {
   /* --- Color --- */

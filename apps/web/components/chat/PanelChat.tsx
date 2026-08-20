@@ -25,7 +25,13 @@ export function PanelChat({ chat, ctx, abierto, onCerrar }: Props) {
   }, [mensajes.length]);
 
   useEffect(() => {
-    if (abierto) input.current?.focus();
+    // En celular no forzamos el foco: además de ser la causa más
+    // probable de que iOS corra la página al costado al abrir el
+    // panel, tampoco conviene que salte el teclado antes de elegir
+    // canal.
+    if (abierto && window.matchMedia('(min-width: 640px)').matches) {
+      input.current?.focus();
+    }
   }, [abierto, canalActivo]);
 
   if (!abierto) return null;
