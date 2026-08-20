@@ -22,7 +22,12 @@ export function BotonPedirStock({ articulo, ctx }: Props) {
     if (!abierto) return;
     void canalesLocales().then((cs) => {
       setCanales(cs);
-      setCanal((c) => c || cs[0]?.id || '');
+      // Preferimos el canal "Compras" como destino por defecto: es
+      // donde tiene que caer un pedido de mercadería. Si no existe
+      // por algún motivo, cae al primero de la lista.
+      setCanal(
+        (c) => c || cs.find((x) => x.nombre === 'Compras')?.id || cs[0]?.id || '',
+      );
     });
   }, [abierto]);
 
