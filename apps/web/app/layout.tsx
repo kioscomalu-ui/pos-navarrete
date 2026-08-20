@@ -1,73 +1,52 @@
-import type { Metadata, Viewport } from 'next';
-import { Chivo, Chivo_Mono } from 'next/font/google';
-import './globals.css';
-import { APP, EMPRESA } from '@pos/shared/constants/empresa';
-import { RegistrarSW } from '@/components/RegistrarSW';
+import { redirect } from 'next/navigation';
+import { getSesion } from '@/lib/sesion';
+import { createClient } from '@/lib/supabase-server';
+import { Nav } from '@/components/Nav';
+import { EstadoConexion } from '@/components/EstadoConexion';
 
-// Chivo y Chivo Mono son de Omnibus-Type, fundidora argentina.
-// Chivo se diseñó para señalética de alta legibilidad, que es
-// exactamente el problema de una pantalla de caja.
-const chivo = Chivo({
-  subsets: ['latin'],
-  weight: ['400', '500', '700', '900'],
-  variable: '--fuente-ui',
-  display: 'swap',
-});
+/**
+ * Sin caché: este layout resuelve QUIÉN es el usuario actual, y ese
+ * dato baja a toda la aplicación (nav, chat, caja). Si Next reutiliza
+ * una versión cacheada, un dispositivo compartido puede quedar
+ * mostrando —y mandando mensajes con— la identidad del usuario
+ * anterior, aunque el token de sesión ya sea el nuevo.
+ */
+export const dynamic = 'force-dynamic';
 
-const chivoMono = Chivo_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '700'],
-  variable: '--fuente-num',
-  display: 'swap',
-});
-
-export const metadata: Metadata = {
-  title: {
-    default: APP.nombre,
-    template: `%s · ${APP.nombreCorto}`,
-  },
-  description: `Sistema de gestión de ventas de ${EMPRESA.razonSocial}`,
-  manifest: '/manifest.json',
-  applicationName: APP.nombreCorto,
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'black-translucent',
-    title: APP.nombreCorto,
-  },
-  // Evita que iOS convierta los importes en enlaces telefónicos
-  formatDetection: {
-    telephone: false,
-  },
-  // El sistema es interno: no tiene por qué aparecer en buscadores
-  robots: {
-    index: false,
-    follow: false,
-  },
-};
-
-export const viewport: Viewport = {
-  themeColor: '#16332B',
-  width: 'device-width',
-  initialScale: 1,
-  maximumScale: 1,
-  // Sin zoom accidental al tocar un campo numérico
-  userScalable: false,
-};
-
-export default function RootLayout({
+export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const sesion = await getSesion();
+  if (!sesion) redirect('/login');
+
+  const supabase = await createClient();
+
+  const { data: sucursalesAutorizadas } = await supabase.rpc(
+    'sucursales_autorizadas',
+    { p_usuario_id: sesion.usuarioId },
+  );
+
   return (
-    <html
-      lang="es-AR"
-      className={`${chivo.variable} ${chivoMono.variable}`}
-    >
-      <body className="bg-papel text-verde-esmalte antialiased">
-        {children}
-        <RegistrarSW />
-      </body>
-    </html>
+    <div className="min-h-screen bg-papel">
+      <Nav
+        usuarioId={sesion.usuarioId}
+        nombre={sesion.nombre}
+        apellido={sesion.apellido}
+        rol={sesion.rol}
+        sucursalId={sesion.sucursalId}
+        sucursalNombre={sesion.sucursalNombre}
+        sucursalesAutorizadas={(sucursalesAutorizadas ?? []).map((s: any) => ({
+          id: s.id,
+          nombre: s.nombre,
+          esPrincipal: s.es_principal,
+        }))}
+      />
+
+      <EstadoConexion />
+
+      <main className="max-w-6xl mx-auto px-6 py-6">{children}</main>
+    </div>
   );
 }
