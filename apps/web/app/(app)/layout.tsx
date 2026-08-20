@@ -4,6 +4,15 @@ import { createClient } from '@/lib/supabase-server';
 import { Nav } from '@/components/Nav';
 import { EstadoConexion } from '@/components/EstadoConexion';
 
+/**
+ * Sin caché: este layout resuelve QUIÉN es el usuario actual, y ese
+ * dato baja a toda la aplicación (nav, chat, caja). Si Next reutiliza
+ * una versión cacheada, un dispositivo compartido puede quedar
+ * mostrando —y mandando mensajes con— la identidad del usuario
+ * anterior, aunque el token de sesión ya sea el nuevo.
+ */
+export const dynamic = 'force-dynamic';
+
 export default async function AppLayout({
   children,
 }: {
