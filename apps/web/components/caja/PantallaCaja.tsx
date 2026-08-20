@@ -12,10 +12,13 @@ import { SelectorCliente } from './SelectorCliente';
 import { VentaLibre } from './VentaLibre';
 import { CobroMixto } from './CobroMixto';
 import { EscanerCamara } from './EscanerCamara';
+import { ModalPagoProveedor } from './ModalPagoProveedor';
+import { ModalTransferenciaCaja } from './ModalTransferenciaCaja';
 import { RemitoImprimible } from './RemitoImprimible';
 import { formatearPrecio } from '@pos/shared/constants/empresa';
 import type { DesglosePago } from '@/lib/venta-engine';
 import type { VentaLocal, ClienteLocal } from '@/lib/db-local';
+import type { RolUsuario } from '@pos/shared/types';
 
 interface Props {
   sucursalId: string;
@@ -25,6 +28,7 @@ interface Props {
   nombreVendedor: string;
   puntoVenta: number;
   umbralDiferencia: number;
+  rol: RolUsuario;
 }
 
 export function PantallaCaja(props: Props) {
@@ -54,18 +58,21 @@ export function PantallaCaja(props: Props) {
   const [ventaLibre, setVentaLibre] = useState(false);
   const [pagoMixto, setPagoMixto] = useState(false);
   const [escaneando, setEscaneando] = useState(false);
+  const [pagandoProveedor, setPagandoProveedor] = useState(false);
+  const [transfiriendo, setTransfiriendo] = useState(false);
   const [cerrando, setCerrando] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
   const [reintentando, setReintentando] = useState(false);
   const [ultimaVenta, setUltimaVenta] = useState<VentaLocal | null>(null);
   const inputPeso = useRef<HTMLInputElement>(null);
 
+  const puedeMoverEfectivo = props.rol === 'admin' || props.rol === 'gerente';
+
   const mostrarAviso = useCallback((texto: string) => {
     setAviso(texto);
     setTimeout(() => setAviso(''), 2500);
   }, []);
 
-  // ---- Sincronización manual ----
   const forzarReintento = useCallback(async () => {
     setReintentando(true);
     try {
@@ -84,7 +91,6 @@ export function PantallaCaja(props: Props) {
     }
   }, [mostrarAviso]);
 
-  // ---- Escáner (USB o cámara: los dos llegan acá) ----
   const alEscanear = useCallback(
     (codigo: string) => {
       try {
@@ -102,7 +108,6 @@ export function PantallaCaja(props: Props) {
           setTimeout(() => inputPeso.current?.focus(), 0);
         }
       } catch {
-        // El código escaneado es el del artículo genérico (000000)
         setVentaLibre(true);
       }
     },
@@ -116,12 +121,13 @@ export function PantallaCaja(props: Props) {
     ventaLibre ||
     pagoMixto ||
     escaneando ||
+    pagandoProveedor ||
+    transfiriendo ||
     cerrando ||
     !!ultimaVenta;
 
   useEscaner(alEscanear, listo && !!caja && !hayModal);
 
-  // ---- Cobro ----
   const ejecutarCobro = useCallback(
     async (
       pagos: DesglosePago[],
@@ -141,7 +147,6 @@ export function PantallaCaja(props: Props) {
     [engine, mostrarAviso],
   );
 
-  /** Atajo para los botones de un solo método: arma el array de un elemento */
   const cobrar = useCallback(
     (metodo: 'efectivo' | 'posnet' | 'billetera' | 'cuenta_corriente') => {
       if (carrito.items.length === 0) return;
@@ -162,7 +167,15 @@ export function PantallaCaja(props: Props) {
     [carrito, ejecutarCobro, mostrarAviso],
   );
 
-  // ---- Remito ----
+  const alConfirmarMovimiento = useCallback(
+    (mensaje: string) => {
+      setPagandoProveedor(false);
+      setTransfiriendo(false);
+      mostrarAviso(mensaje);
+    },
+    [mostrarAviso],
+  );
+
   const imprimirRemito = useCallback(async () => {
     if (!ultimaVenta) return;
     try {
@@ -178,7 +191,6 @@ export function PantallaCaja(props: Props) {
     }
   }, [ultimaVenta, engine, mostrarAviso]);
 
-  // ---- Atajos de teclado ----
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (ultimaVenta) {
@@ -199,6 +211,8 @@ export function PantallaCaja(props: Props) {
         ventaLibre ||
         pagoMixto ||
         escaneando ||
+        pagandoProveedor ||
+        transfiriendo ||
         buscando ||
         cerrando ||
         !caja
@@ -229,14 +243,12 @@ export function PantallaCaja(props: Props) {
     ventaLibre,
     pagoMixto,
     escaneando,
+    pagandoProveedor,
+    transfiriendo,
     buscando,
     cerrando,
     caja,
   ]);
-
-  // ================================================================
-  // Estados previos a la venta
-  // ================================================================
 
   if (buscandoCaja) {
     return <p className="py-24 text-center text-verde-claro">Cargando…</p>;
@@ -276,10 +288,6 @@ export function PantallaCaja(props: Props) {
       </div>
     );
   }
-
-  // ================================================================
-  // Pantalla de vuelto
-  // ================================================================
 
   if (ultimaVenta) {
     const hayVuelto = ultimaVenta.vuelto != null && ultimaVenta.vuelto > 0;
@@ -362,14 +370,9 @@ export function PantallaCaja(props: Props) {
     );
   }
 
-  // ================================================================
-  // Pantalla de venta
-  // ================================================================
-
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5 -mt-2">
 
-      {/* ---------- Mostrador ---------- */}
       <div className="space-y-3">
 
         <div className="flex items-center justify-between text-xs">
@@ -531,10 +534,8 @@ export function PantallaCaja(props: Props) {
         </div>
       </div>
 
-      {/* ---------- Panel de cobro ---------- */}
       <aside className="space-y-2.5 lg:sticky lg:top-20 lg:self-start">
 
-        {/* Visor */}
         <div className="bg-verde-esmalte rounded-lg overflow-hidden shadow-lg">
           <div
             className={`h-1 transition-colors ${
@@ -570,7 +571,6 @@ export function PantallaCaja(props: Props) {
           </div>
         </div>
 
-        {/* Cobro */}
         <div className="space-y-2">
           <BotonCobro
             tecla="F1"
@@ -634,6 +634,25 @@ export function PantallaCaja(props: Props) {
           </button>
         </div>
 
+        {puedeMoverEfectivo && (
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <button
+              onClick={() => setPagandoProveedor(true)}
+              className="py-2.5 text-sm rounded-lg bg-mostrador ring-1 ring-tiza/60
+                         hover:ring-verde-claro"
+            >
+              Pagar proveedor
+            </button>
+            <button
+              onClick={() => setTransfiriendo(true)}
+              className="py-2.5 text-sm rounded-lg bg-mostrador ring-1 ring-tiza/60
+                         hover:ring-verde-claro"
+            >
+              Transferir a caja
+            </button>
+          </div>
+        )}
+
         <div className="flex gap-2 pt-1">
           <button
             onClick={() => engine.limpiar()}
@@ -651,7 +670,6 @@ export function PantallaCaja(props: Props) {
         </div>
       </aside>
 
-      {/* ---------- Modales ---------- */}
       {buscando && (
         <BuscadorArticulos
           onElegir={(id) => {
@@ -723,6 +741,22 @@ export function PantallaCaja(props: Props) {
           total={carrito.total}
           onConfirmar={(pagos, recibido) => ejecutarCobro(pagos, recibido)}
           onCancelar={() => setPagoMixto(false)}
+        />
+      )}
+
+      {pagandoProveedor && (
+        <ModalPagoProveedor
+          cajaId={caja.id}
+          onConfirmar={() => alConfirmarMovimiento('Pago registrado')}
+          onCancelar={() => setPagandoProveedor(false)}
+        />
+      )}
+
+      {transfiriendo && (
+        <ModalTransferenciaCaja
+          cajaId={caja.id}
+          onConfirmar={() => alConfirmarMovimiento('Transferencia registrada')}
+          onCancelar={() => setTransfiriendo(false)}
         />
       )}
     </div>

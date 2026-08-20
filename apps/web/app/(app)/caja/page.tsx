@@ -21,6 +21,7 @@ export default async function CajaPage() {
       nombreVendedor={sesion.nombre}
       puntoVenta={sucursal?.punto_venta ?? 1}
       umbralDiferencia={Number(sucursal?.umbral_diferencia_caja ?? 500)}
+      rol={sesion.rol}
     />
   );
 }

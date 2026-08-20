@@ -1,16 +1,17 @@
 import { dbLocal, type CajaLocal } from './db-local';
 import { encolar } from './cola-sync';
+import { supabase } from './supabase';
 
 export interface TotalesDia {
   cantidadVentas: number;
   total: number;
-  /** Solo lo cobrado en efectivo por ventas, sin el fondo inicial */
   efectivo: number;
-  /** efectivoInicial de la caja + `efectivo`: lo que debería haber en el cajón */
   efectivoEsperado: number;
   billetera: number;
   posnet: number;
   ctaCte: number;
+  egresos: number;
+  ingresos: number;
 }
 
 export interface DeclaracionCierre {
@@ -65,7 +66,6 @@ export async function abrirCaja(
   return caja;
 }
 
-/** La caja abierta hoy para este vendedor, o null si no abrió ninguna */
 export async function cajaAbierta(vendedorId: string): Promise<CajaLocal | null> {
   const fecha = new Date().toISOString().slice(0, 10);
 
@@ -78,19 +78,76 @@ export async function cajaAbierta(vendedorId: string): Promise<CajaLocal | null>
 }
 
 // ====================================================================
+// Movimientos: pago a proveedor y transferencias entre cajas.
+// No funcionan offline: son admin/gerente moviendo efectivo real, y
+// una transferencia necesita confirmar en el momento que la otra
+// caja sigue abierta.
+// ====================================================================
+
+export async function pagarProveedor(
+  cajaId: string,
+  monto: number,
+  proveedorId: string,
+  motivo?: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('registrar_pago_proveedor', {
+    p_caja_id: cajaId,
+    p_monto: monto,
+    p_proveedor_id: proveedorId,
+    p_motivo: motivo || null,
+  });
+  if (error) throw error;
+}
+
+export async function transferirACaja(
+  cajaOrigenId: string,
+  cajaDestinoId: string,
+  monto: number,
+  motivo?: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('registrar_transferencia_caja', {
+    p_caja_origen_id: cajaOrigenId,
+    p_caja_destino_id: cajaDestinoId,
+    p_monto: monto,
+    p_motivo: motivo || null,
+  });
+  if (error) throw error;
+}
+
+export interface CajaAbierta {
+  id: string;
+  vendedor: string;
+  sucursal: string;
+  sucursalId: string;
+}
+
+export async function cajasAbiertas(): Promise<CajaAbierta[]> {
+  const { data, error } = await supabase.rpc('cajas_abiertas');
+  if (error) throw error;
+
+  return (data ?? []).map((c: any) => ({
+    id: c.id,
+    vendedor: c.vendedor,
+    sucursal: c.sucursal,
+    sucursalId: c.sucursal_id,
+  }));
+}
+
+async function movimientosDeCaja(
+  cajaId: string,
+): Promise<{ tipo: string; monto: number }[]> {
+  const { data } = await supabase
+    .from('movimientos_caja')
+    .select('tipo, monto')
+    .eq('caja_id', cajaId);
+
+  return data ?? [];
+}
+
+// ====================================================================
 // Totales del día
 // ====================================================================
 
-/**
- * Suma las ventas del día por método de pago, a partir del desglose
- * guardado en cada venta (`pagos`). Una venta simple tiene un solo
- * elemento en ese array; una venta combinada, varios — cada uno se
- * cuenta en el método que corresponde, no todo bajo un único total.
- *
- * `efectivoEsperado` ya incluye el fondo inicial: es directamente lo
- * que debería contarse en el cajón al cierre, sin que la pantalla
- * tenga que sumarlo aparte.
- */
 export async function totalesDelDia(caja: CajaLocal): Promise<TotalesDia> {
   const ventas = await dbLocal.ventas
     .where('fecha')
@@ -115,16 +172,37 @@ export async function totalesDelDia(caja: CajaLocal): Promise<TotalesDia> {
     }
   }
 
+  let egresos = 0;
+  let ingresos = 0;
+
+  if (caja.id) {
+    try {
+      const movimientos = await movimientosDeCaja(caja.id);
+      for (const m of movimientos) {
+        if (m.tipo === 'pago_proveedor' || m.tipo === 'transferencia_salida') {
+          egresos += Number(m.monto);
+        }
+        if (m.tipo === 'transferencia_entrada') {
+          ingresos += Number(m.monto);
+        }
+      }
+    } catch {
+      // Sin conexión no se pueden traer los movimientos del servidor.
+    }
+  }
+
   const r2 = (n: number) => Math.round(n * 100) / 100;
 
   return {
     cantidadVentas: ventas.length,
     total: r2(total),
     efectivo: r2(efectivo),
-    efectivoEsperado: r2(caja.efectivoInicial + efectivo),
+    efectivoEsperado: r2(caja.efectivoInicial + efectivo + ingresos - egresos),
     billetera: r2(billetera),
     posnet: r2(posnet),
     ctaCte: r2(ctaCte),
+    egresos: r2(egresos),
+    ingresos: r2(ingresos),
   };
 }
 
@@ -138,9 +216,6 @@ export async function cerrarCaja(
 ): Promise<CajaLocal> {
   const totales = await totalesDelDia(caja);
 
-  // La diferencia se mide contra el efectivo: es el único medio donde
-  // puede haber un error humano de conteo. Tarjeta y billetera quedan
-  // registrados por su propio medio de pago, no dependen del cajón.
   const diferencia =
     Math.round((datos.efectivoFinal - totales.efectivoEsperado) * 100) / 100;
 
