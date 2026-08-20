@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase-server';
 import { getSesion } from '@/lib/sesion';
+import { AccionesFaltantes } from '@/components/reportes/AccionesFaltantes';
 
 export default async function ReporteFaltantes() {
   const sesion = await getSesion();
@@ -19,15 +20,20 @@ export default async function ReporteFaltantes() {
         <p className="text-sm text-neutral-500">
           {filas.length} artículos por debajo del stock mínimo
         </p>
-        {filas.length > 0 && (
-          <a
-            href={`data:text/csv;charset=utf-8,${encodeURIComponent(aCSV(filas))}`}
-            download="faltantes.csv"
-            className="px-3 py-1.5 text-sm border border-neutral-300 rounded hover:bg-neutral-100"
-          >
-            Descargar CSV
-          </a>
-        )}
+
+        <div className="flex items-center gap-2">
+          <AccionesFaltantes filas={filas} />
+
+          {filas.length > 0 && (
+            <a
+              href={`data:text/csv;charset=utf-8,${encodeURIComponent(aCSV(filas))}`}
+              download="faltantes.csv"
+              className="px-3 py-1.5 text-sm border border-neutral-300 rounded hover:bg-neutral-100"
+            >
+              Descargar CSV
+            </a>
+          )}
+        </div>
       </div>
 
       <div className="bg-white border border-neutral-200 rounded overflow-hidden">
