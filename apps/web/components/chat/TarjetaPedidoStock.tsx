@@ -8,10 +8,12 @@ import type { MensajeLocal } from '@/lib/db-local';
 interface Props {
   mensaje: MensajeLocal;
   propio: boolean;
+  /** true cuando el pedido cayó en el canal "Compras", no en uno de sucursal */
+  esCompras: boolean;
   onResponder: () => void;
 }
 
-export function TarjetaPedidoStock({ mensaje, propio, onResponder }: Props) {
+export function TarjetaPedidoStock({ mensaje, propio, esCompras, onResponder }: Props) {
   const [enviando, setEnviando] = useState(false);
 
   const meta = (mensaje.metadata ?? {}) as {
@@ -21,7 +23,12 @@ export function TarjetaPedidoStock({ mensaje, propio, onResponder }: Props) {
     estado?: string;
   };
 
-  const stockPropio = meta.articuloId ? catalogo.stockDe(meta.articuloId) : null;
+  // La comparación contra stock propio solo tiene sentido cuando el
+  // pedido es entre sucursales ("¿vos tenés esto para pasarme?"). En
+  // Compras, quien lee no está resolviendo con SU stock, va a salir
+  // a comprarlo — mostrar "Tenés: X" ahí sería confuso.
+  const stockPropio =
+    !esCompras && meta.articuloId ? catalogo.stockDe(meta.articuloId) : null;
 
   async function responder(estado: 'confirmado' | 'rechazado') {
     setEnviando(true);
@@ -36,7 +43,7 @@ export function TarjetaPedidoStock({ mensaje, propio, onResponder }: Props) {
   return (
     <div className="border border-neutral-200 rounded-lg p-3 bg-white">
       <p className="text-xs text-neutral-500">
-        {mensaje.autorNombre} · pedido de mercadería
+        {mensaje.autorNombre} · {esCompras ? 'pedido a compras' : 'pedido de mercadería'}
       </p>
 
       <p className="font-medium mt-1">{meta.articuloNombre}</p>
@@ -66,24 +73,30 @@ export function TarjetaPedidoStock({ mensaje, propio, onResponder }: Props) {
             disabled={enviando}
             className="flex-1 py-1.5 text-sm bg-neutral-900 text-white rounded disabled:opacity-40"
           >
-            Tengo
+            {esCompras ? 'Comprado' : 'Tengo'}
           </button>
           <button
             onClick={() => void responder('rechazado')}
             disabled={enviando}
             className="flex-1 py-1.5 text-sm border border-neutral-300 rounded disabled:opacity-40"
           >
-            No tengo
+            {esCompras ? 'No se consigue' : 'No tengo'}
           </button>
         </div>
       )}
 
       {meta.estado === 'confirmado' && (
-        <p className="text-sm text-emerald-700 mt-2">✓ Confirmado</p>
+        <p className="text-sm text-emerald-700 mt-2">
+          ✓ {esCompras ? 'Comprado' : 'Confirmado'}
+        </p>
       )}
+
       {meta.estado === 'rechazado' && (
-        <p className="text-sm text-neutral-500 mt-2">Sin stock</p>
+        <p className="text-sm text-neutral-500 mt-2">
+          {esCompras ? 'No se consigue' : 'Sin stock'}
+        </p>
       )}
+
       {meta.estado === 'pendiente' && propio && (
         <p className="text-sm text-neutral-400 mt-2">Esperando respuesta</p>
       )}

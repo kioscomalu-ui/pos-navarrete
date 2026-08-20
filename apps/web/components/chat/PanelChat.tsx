@@ -17,7 +17,6 @@ export function PanelChat({ chat, ctx, abierto, onCerrar }: Props) {
     chat;
 
   const [texto, setTexto] = useState('');
-  // …el resto queda igual
   const finLista = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
 
@@ -33,6 +32,7 @@ export function PanelChat({ chat, ctx, abierto, onCerrar }: Props) {
 
   const canal = canales.find((c) => c.id === canalActivo);
   const puedeEscribir = canal && !canal.soloLectura;
+  const esCanalCompras = canal?.nombre === 'Compras';
 
   async function mandar() {
     const t = texto.trim();
@@ -45,8 +45,11 @@ export function PanelChat({ chat, ctx, abierto, onCerrar }: Props) {
     <>
       <div className="fixed inset-0 bg-black/20 z-40" onClick={onCerrar} />
 
-      <aside className="fixed right-0 top-0 bottom-0 w-96 bg-white border-l border-neutral-200 z-50 flex flex-col shadow-xl">
-        {/* Canales */}
+      <aside
+        className="fixed inset-x-0 bottom-0 top-14 sm:inset-x-auto sm:right-0
+                   sm:top-0 sm:bottom-0 sm:w-96 bg-white sm:border-l
+                   border-neutral-200 z-50 flex flex-col shadow-xl"
+      >
         <div className="border-b border-neutral-200">
           <div className="flex items-center justify-between px-4 py-3">
             <span className="font-medium">Mensajes</span>
@@ -85,7 +88,6 @@ export function PanelChat({ chat, ctx, abierto, onCerrar }: Props) {
           </div>
         </div>
 
-        {/* Mensajes */}
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
           {mensajes.length === 0 && (
             <p className="text-center text-sm text-neutral-400 py-12">
@@ -102,6 +104,7 @@ export function PanelChat({ chat, ctx, abierto, onCerrar }: Props) {
                   key={m.id}
                   mensaje={m}
                   propio={propio}
+                  esCompras={esCanalCompras}
                   onResponder={refrescar}
                 />
               );
@@ -149,7 +152,6 @@ export function PanelChat({ chat, ctx, abierto, onCerrar }: Props) {
           <div ref={finLista} />
         </div>
 
-        {/* Escribir */}
         {puedeEscribir ? (
           <div className="border-t border-neutral-200 p-3 flex gap-2">
             <input
@@ -161,7 +163,7 @@ export function PanelChat({ chat, ctx, abierto, onCerrar }: Props) {
                   e.preventDefault();
                   void mandar();
                 }
-                e.stopPropagation();  // no disparar atajos de la caja
+                e.stopPropagation();
               }}
               placeholder="Escribí un mensaje…"
               className="flex-1 px-3 py-2 border border-neutral-300 rounded text-sm"
