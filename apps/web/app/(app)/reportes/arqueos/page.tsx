@@ -35,15 +35,12 @@ export default async function ReporteArqueos({
 
   const todas = (data ?? []) as FilaArqueo[];
 
-  // Lista de vendedores presentes en el período, para el filtro
   const vendedores = [...new Set(todas.map((f) => f.vendedor))].sort();
 
   const vendedorSeleccionado = sp.vendedor ?? '';
   const filas = vendedorSeleccionado
     ? todas.filter((f) => f.vendedor === vendedorSeleccionado)
-    : // Sin filtro: agrupadas por vendedor y luego por fecha, para que
-      // el historial de cada persona quede junto y sea fácil de leer
-      [...todas].sort((a, b) => {
+    : [...todas].sort((a, b) => {
         const porVendedor = a.vendedor.localeCompare(b.vendedor, 'es');
         return porVendedor !== 0 ? porVendedor : b.fecha.localeCompare(a.fecha);
       });
@@ -65,7 +62,6 @@ export default async function ReporteArqueos({
     <div className="space-y-6">
       <SelectorRango />
 
-      {/* --- Filtro por vendedor --- */}
       {vendedores.length > 1 && (
         <div className="flex items-center gap-2 flex-wrap">
           <Link
@@ -94,7 +90,7 @@ export default async function ReporteArqueos({
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Tarjeta etiqueta="Cierres" valor={String(filas.length)} />
         <Tarjeta etiqueta="Con diferencia" valor={String(conDiferencia.length)} />
         <Tarjeta
@@ -105,68 +101,70 @@ export default async function ReporteArqueos({
       </div>
 
       <div className="bg-white border border-neutral-200 rounded overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-neutral-500 text-xs uppercase tracking-wide">
-            <tr>
-              <th className="text-left font-medium px-4 py-2.5">Fecha</th>
-              <th className="text-left font-medium px-4 py-2.5">Vendedor</th>
-              <th className="text-right font-medium px-4 py-2.5">Inicial</th>
-              <th className="text-right font-medium px-4 py-2.5">Ventas</th>
-              <th className="text-right font-medium px-4 py-2.5">Contado</th>
-              <th className="text-right font-medium px-4 py-2.5">Diferencia</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-100">
-            {filas.map((f) => {
-              const dif = Number(f.diferencia ?? 0);
-              return (
-                <tr key={f.caja_id} className="hover:bg-neutral-50">
-                  <td className="px-4 py-2.5">
-                    {new Date(f.fecha + 'T12:00').toLocaleDateString('es-AR', {
-                      day: '2-digit',
-                      month: '2-digit',
-                    })}
-                    {f.estado === 'abierta' && (
-                      <span className="ml-2 text-xs text-amber-600">abierta</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {f.vendedor}
-                    {f.notas && (
-                      <p className="text-xs text-neutral-500 mt-0.5">{f.notas}</p>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
-                    {formatearPrecio(Number(f.efectivo_inicial))}
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
-                    {f.total_ventas != null
-                      ? formatearPrecio(Number(f.total_ventas))
-                      : '—'}
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-mono">
-                    {f.efectivo_final != null
-                      ? formatearPrecio(Number(f.efectivo_final))
-                      : '—'}
-                  </td>
-                  <td
-                    className={`px-4 py-2.5 text-right font-mono font-medium ${
-                      dif === 0
-                        ? 'text-neutral-400'
-                        : dif > 0
-                          ? 'text-blue-700'
-                          : 'text-red-700'
-                    }`}
-                  >
-                    {f.diferencia != null
-                      ? `${dif > 0 ? '+' : ''}${formatearPrecio(dif)}`
-                      : '—'}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[34rem]">
+            <thead className="bg-neutral-50 text-neutral-500 text-xs uppercase tracking-wide">
+              <tr>
+                <th className="text-left font-medium px-4 py-2.5">Fecha</th>
+                <th className="text-left font-medium px-4 py-2.5">Vendedor</th>
+                <th className="text-right font-medium px-4 py-2.5">Inicial</th>
+                <th className="text-right font-medium px-4 py-2.5">Ventas</th>
+                <th className="text-right font-medium px-4 py-2.5">Contado</th>
+                <th className="text-right font-medium px-4 py-2.5">Diferencia</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-100">
+              {filas.map((f) => {
+                const dif = Number(f.diferencia ?? 0);
+                return (
+                  <tr key={f.caja_id} className="hover:bg-neutral-50">
+                    <td className="px-4 py-2.5">
+                      {new Date(f.fecha + 'T12:00').toLocaleDateString('es-AR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                      })}
+                      {f.estado === 'abierta' && (
+                        <span className="ml-2 text-xs text-amber-600">abierta</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {f.vendedor}
+                      {f.notas && (
+                        <p className="text-xs text-neutral-500 mt-0.5">{f.notas}</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
+                      {formatearPrecio(Number(f.efectivo_inicial))}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
+                      {f.total_ventas != null
+                        ? formatearPrecio(Number(f.total_ventas))
+                        : '—'}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono">
+                      {f.efectivo_final != null
+                        ? formatearPrecio(Number(f.efectivo_final))
+                        : '—'}
+                    </td>
+                    <td
+                      className={`px-4 py-2.5 text-right font-mono font-medium ${
+                        dif === 0
+                          ? 'text-neutral-400'
+                          : dif > 0
+                            ? 'text-blue-700'
+                            : 'text-red-700'
+                      }`}
+                    >
+                      {f.diferencia != null
+                        ? `${dif > 0 ? '+' : ''}${formatearPrecio(dif)}`
+                        : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
         {filas.length === 0 && (
           <p className="px-4 py-12 text-center text-sm text-neutral-400">

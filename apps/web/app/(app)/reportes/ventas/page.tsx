@@ -115,7 +115,7 @@ export default async function ReporteVentas({
         </div>
       )}
 
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <Tarjeta etiqueta="Facturado" valor={formatearPrecio(totales.total)} destacar />
         <Tarjeta etiqueta="Ventas" valor={String(totales.ventas)} />
         <Tarjeta
@@ -131,55 +131,57 @@ export default async function ReporteVentas({
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_20rem] gap-4">
         <div className="bg-white border border-neutral-200 rounded overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-neutral-500 text-xs uppercase tracking-wide">
-              <tr>
-                <th className="text-left font-medium px-4 py-2.5">Día</th>
-                <th className="text-right font-medium px-4 py-2.5">Ventas</th>
-                <th className="text-right font-medium px-4 py-2.5">Efectivo</th>
-                <th className="text-right font-medium px-4 py-2.5">POSNET</th>
-                <th className="text-right font-medium px-4 py-2.5">Billetera</th>
-                <th className="text-right font-medium px-4 py-2.5">Total</th>
-                <th className="w-32 px-4 py-2.5"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-100">
-              {filas.map((f) => (
-                <tr key={f.dia} className="hover:bg-neutral-50">
-                  <td className="px-4 py-2.5">
-                    {new Date(f.dia + 'T12:00').toLocaleDateString('es-AR', {
-                      weekday: 'short',
-                      day: '2-digit',
-                      month: '2-digit',
-                    })}
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
-                    {f.cantidad_ventas}
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
-                    {formatearPrecio(Number(f.efectivo))}
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
-                    {formatearPrecio(Number(f.posnet))}
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
-                    {formatearPrecio(Number(f.billetera))}
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-mono font-medium">
-                    {formatearPrecio(Number(f.total))}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <div className="h-1.5 bg-neutral-100 rounded overflow-hidden">
-                      <div
-                        className="h-full bg-neutral-900"
-                        style={{ width: `${(Number(f.total) / maximo) * 100}%` }}
-                      />
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[38rem]">
+              <thead className="bg-neutral-50 text-neutral-500 text-xs uppercase tracking-wide">
+                <tr>
+                  <th className="text-left font-medium px-4 py-2.5">Día</th>
+                  <th className="text-right font-medium px-4 py-2.5">Ventas</th>
+                  <th className="text-right font-medium px-4 py-2.5">Efectivo</th>
+                  <th className="text-right font-medium px-4 py-2.5">POSNET</th>
+                  <th className="text-right font-medium px-4 py-2.5">Billetera</th>
+                  <th className="text-right font-medium px-4 py-2.5">Total</th>
+                  <th className="w-32 px-4 py-2.5"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {filas.map((f) => (
+                  <tr key={f.dia} className="hover:bg-neutral-50">
+                    <td className="px-4 py-2.5">
+                      {new Date(f.dia + 'T12:00').toLocaleDateString('es-AR', {
+                        weekday: 'short',
+                        day: '2-digit',
+                        month: '2-digit',
+                      })}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
+                      {f.cantidad_ventas}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
+                      {formatearPrecio(Number(f.efectivo))}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
+                      {formatearPrecio(Number(f.posnet))}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
+                      {formatearPrecio(Number(f.billetera))}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono font-medium">
+                      {formatearPrecio(Number(f.total))}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="h-1.5 bg-neutral-100 rounded overflow-hidden">
+                        <div
+                          className="h-full bg-neutral-900"
+                          style={{ width: `${(Number(f.total) / maximo) * 100}%` }}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           {filas.length === 0 && (
             <p className="px-4 py-12 text-center text-sm text-neutral-400">

@@ -39,7 +39,7 @@ export default async function ReporteArticulos({
     <div className="space-y-6">
       <SelectorRango />
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Tarjeta
           etiqueta="Facturado"
           valor={formatearPrecio(filas.reduce((a, f) => a + Number(f.facturado), 0))}
@@ -49,52 +49,54 @@ export default async function ReporteArticulos({
       </div>
 
       <div className="bg-white border border-neutral-200 rounded overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-neutral-500 text-xs uppercase tracking-wide">
-            <tr>
-              <th className="text-left font-medium px-4 py-2.5">Artículo</th>
-              <th className="text-right font-medium px-4 py-2.5">Vendido</th>
-              <th className="text-right font-medium px-4 py-2.5">Facturado</th>
-              <th className="text-right font-medium px-4 py-2.5">Margen</th>
-              <th className="text-right font-medium px-4 py-2.5">%</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-100">
-            {filas.map((f, i) => (
-              <tr key={f.articulo_id} className="hover:bg-neutral-50">
-                <td className="px-4 py-2.5">
-                  <span className="text-neutral-400 font-mono text-xs mr-2">
-                    {i + 1}
-                  </span>
-                  {f.nombre}
-                </td>
-                <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
-                  {f.unidad === 'unidad'
-                    ? Number(f.cantidad)
-                    : Number(f.cantidad).toFixed(2)}
-                  <span className="text-xs text-neutral-400 ml-1">
-                    {f.unidad === 'unidad' ? 'un' : f.unidad}
-                  </span>
-                </td>
-                <td className="px-4 py-2.5 text-right font-mono">
-                  {formatearPrecio(Number(f.facturado))}
-                </td>
-                <td className="px-4 py-2.5 text-right font-mono">
-                  {formatearPrecio(Number(f.margen))}
-                </td>
-                <td
-                  className={`px-4 py-2.5 text-right font-mono ${
-                    Number(f.margen_porcentaje) < 10
-                      ? 'text-red-600'
-                      : 'text-neutral-500'
-                  }`}
-                >
-                  {Number(f.margen_porcentaje)}%
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[32rem]">
+            <thead className="bg-neutral-50 text-neutral-500 text-xs uppercase tracking-wide">
+              <tr>
+                <th className="text-left font-medium px-4 py-2.5">Artículo</th>
+                <th className="text-right font-medium px-4 py-2.5">Vendido</th>
+                <th className="text-right font-medium px-4 py-2.5">Facturado</th>
+                <th className="text-right font-medium px-4 py-2.5">Margen</th>
+                <th className="text-right font-medium px-4 py-2.5">%</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-neutral-100">
+              {filas.map((f, i) => (
+                <tr key={f.articulo_id} className="hover:bg-neutral-50">
+                  <td className="px-4 py-2.5">
+                    <span className="text-neutral-400 font-mono text-xs mr-2">
+                      {i + 1}
+                    </span>
+                    {f.nombre}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
+                    {f.unidad === 'unidad'
+                      ? Number(f.cantidad)
+                      : Number(f.cantidad).toFixed(2)}
+                    <span className="text-xs text-neutral-400 ml-1">
+                      {f.unidad === 'unidad' ? 'un' : f.unidad}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono">
+                    {formatearPrecio(Number(f.facturado))}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono">
+                    {formatearPrecio(Number(f.margen))}
+                  </td>
+                  <td
+                    className={`px-4 py-2.5 text-right font-mono ${
+                      Number(f.margen_porcentaje) < 10
+                        ? 'text-red-600'
+                        : 'text-neutral-500'
+                    }`}
+                  >
+                    {Number(f.margen_porcentaje)}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         {filas.length === 0 && (
           <p className="px-4 py-12 text-center text-sm text-neutral-400">
