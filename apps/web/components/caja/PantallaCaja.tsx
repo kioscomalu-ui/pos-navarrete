@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCaja } from '@/hooks/useCaja';
 import { useEscaner } from '@/hooks/useEscaner';
 import { reintentarTodo } from '@/lib/cola-sync';
+import { catalogo } from '@/lib/catalogo-cache';
 import { AperturaCaja } from './AperturaCaja';
 import { CierreCaja } from './CierreCaja';
 import { BuscadorArticulos } from './BuscadorArticulos';
@@ -14,6 +15,7 @@ import { CobroMixto } from './CobroMixto';
 import { EscanerCamara } from './EscanerCamara';
 import { ModalPagoProveedor } from './ModalPagoProveedor';
 import { ModalTransferenciaCaja } from './ModalTransferenciaCaja';
+import { ModalMontoServicio } from './ModalMontoServicio';
 import { RemitoImprimible } from './RemitoImprimible';
 import { formatearPrecio } from '@pos/shared/constants/empresa';
 import type { DesglosePago } from '@/lib/venta-engine';
@@ -31,6 +33,12 @@ interface Props {
   rol: RolUsuario;
 }
 
+interface ArticuloServicio {
+  id: string;
+  nombre: string;
+  comisionPorcentaje: number | null;
+}
+
 export function PantallaCaja(props: Props) {
   const {
     engine,
@@ -39,7 +47,7 @@ export function PantallaCaja(props: Props) {
     infoCarga,
     online,
     enCola,
-    catalogo,
+    catalogo: catalogoInfo,
     caja,
     buscandoCaja,
     abrir,
@@ -60,6 +68,8 @@ export function PantallaCaja(props: Props) {
   const [escaneando, setEscaneando] = useState(false);
   const [pagandoProveedor, setPagandoProveedor] = useState(false);
   const [transfiriendo, setTransfiriendo] = useState(false);
+  const [servicioSeleccionado, setServicioSeleccionado] =
+    useState<ArticuloServicio | null>(null);
   const [cerrando, setCerrando] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
   const [reintentando, setReintentando] = useState(false);
@@ -107,7 +117,18 @@ export function PantallaCaja(props: Props) {
         if (r.item.requiereCantidad) {
           setTimeout(() => inputPeso.current?.focus(), 0);
         }
-      } catch {
+      } catch (e) {
+        if (e instanceof Error && e.message === 'SERVICIO_COMISION') {
+          const art = catalogo.porCodigo(codigo);
+          if (art) {
+            setServicioSeleccionado({
+              id: art.id,
+              nombre: art.nombre,
+              comisionPorcentaje: art.comisionPorcentaje,
+            });
+          }
+          return;
+        }
         setVentaLibre(true);
       }
     },
@@ -123,6 +144,7 @@ export function PantallaCaja(props: Props) {
     escaneando ||
     pagandoProveedor ||
     transfiriendo ||
+    !!servicioSeleccionado ||
     cerrando ||
     !!ultimaVenta;
 
@@ -213,6 +235,7 @@ export function PantallaCaja(props: Props) {
         escaneando ||
         pagandoProveedor ||
         transfiriendo ||
+        servicioSeleccionado ||
         buscando ||
         cerrando ||
         !caja
@@ -245,6 +268,7 @@ export function PantallaCaja(props: Props) {
     escaneando,
     pagandoProveedor,
     transfiriendo,
+    servicioSeleccionado,
     buscando,
     cerrando,
     caja,
@@ -377,7 +401,7 @@ export function PantallaCaja(props: Props) {
 
         <div className="flex items-center justify-between text-xs">
           <span className="text-verde-claro">
-            <span className="num">{catalogo.cantidad}</span> artículos · caja
+            <span className="num">{catalogoInfo.cantidad}</span> artículos · caja
             abierta con{' '}
             <span className="num">{formatearPrecio(caja.efectivoInicial)}</span>
           </span>
@@ -450,6 +474,11 @@ export function PantallaCaja(props: Props) {
                             venta libre
                           </span>
                         )}
+                        {item.esServicio && (
+                          <span className="ml-2 text-xs text-verde-claro">
+                            servicio
+                          </span>
+                        )}
                       </div>
                       <div className="num text-xs text-verde-claro mt-0.5">
                         {formatearPrecio(item.precioUnitario)}
@@ -483,6 +512,10 @@ export function PantallaCaja(props: Props) {
                             className="num w-full px-2 py-1.5 rounded border-2 border-ambar-dial
                                        bg-mostrador text-right focus:outline-none"
                           />
+                        </div>
+                      ) : item.esServicio ? (
+                        <div className="text-right text-xs text-verde-claro/70">
+                          1
                         </div>
                       ) : (
                         <div className="flex items-center justify-end gap-1">
@@ -677,8 +710,19 @@ export function PantallaCaja(props: Props) {
               engine.agregar(id);
               const avisoStock = engine.consumirAvisoStock();
               if (avisoStock) mostrarAviso(avisoStock);
-            } catch {
-              setVentaLibre(true);
+            } catch (e) {
+              if (e instanceof Error && e.message === 'SERVICIO_COMISION') {
+                const art = catalogo.obtener(id);
+                if (art) {
+                  setServicioSeleccionado({
+                    id: art.id,
+                    nombre: art.nombre,
+                    comisionPorcentaje: art.comisionPorcentaje,
+                  });
+                }
+              } else {
+                setVentaLibre(true);
+              }
             }
             setBuscando(false);
           }}
@@ -757,6 +801,23 @@ export function PantallaCaja(props: Props) {
           cajaId={caja.id}
           onConfirmar={() => alConfirmarMovimiento('Transferencia registrada')}
           onCancelar={() => setTransfiriendo(false)}
+        />
+      )}
+
+      {servicioSeleccionado && (
+        <ModalMontoServicio
+          articulo={servicioSeleccionado}
+          onConfirmar={(monto) => {
+            try {
+              engine.agregarServicio(servicioSeleccionado.id, monto);
+            } catch (e) {
+              mostrarAviso(
+                e instanceof Error ? e.message : 'No se pudo agregar',
+              );
+            }
+            setServicioSeleccionado(null);
+          }}
+          onCancelar={() => setServicioSeleccionado(null)}
         />
       )}
     </div>

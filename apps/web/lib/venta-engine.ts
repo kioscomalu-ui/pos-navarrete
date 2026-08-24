@@ -14,15 +14,7 @@ export interface DesglosePago {
 }
 
 export interface ItemCarrito extends ItemVentaLocal {
-  /** Artículos por peso: true hasta que se ingrese la cantidad */
   requiereCantidad: boolean;
-  /**
-   * Identifica la línea dentro del carrito. Para artículos normales
-   * es el id del artículo (repetir el escaneo suma cantidad a la
-   * misma línea). Para ventas libres es un id propio por cada
-   * agregado, así dos líneas libres nunca se pisan entre sí aunque
-   * las dos apunten al mismo artículo genérico.
-   */
   lineaId: string;
 }
 
@@ -44,8 +36,6 @@ type Escucha = (estado: EstadoCarrito) => void;
 export class VentaEngine {
   private items = new Map<string, ItemCarrito>();
   private escuchas = new Set<Escucha>();
-
-  /** Aviso de stock insuficiente, para que la pantalla lo muestre */
   private avisoStock: string | null = null;
 
   constructor(
@@ -54,10 +44,6 @@ export class VentaEngine {
     private codigoSucursal: string,
     private puntoVenta: number,
   ) {}
-
-  // ------------------------------------------------------------------
-  // Camino crítico: sincrónico, sin red
-  // ------------------------------------------------------------------
 
   escanear(codigo: string):
     | { ok: true; item: ItemCarrito; nuevo: boolean }
@@ -70,9 +56,10 @@ export class VentaEngine {
   }
 
   /**
-   * Agrega un artículo del catálogo. El artículo genérico de venta
-   * libre no se agrega por acá: tira error para que la pantalla abra
-   * el cuadro de descripción y precio en su lugar.
+   * Agrega un artículo del catálogo. Los genéricos (venta libre) y
+   * los de servicio con comisión tiran error para que la pantalla
+   * abra el cuadro correspondiente en su lugar — ninguno tiene un
+   * precio fijo que este método pueda usar.
    */
   agregar(articuloId: string): { item: ItemCarrito; nuevo: boolean } {
     const articulo = catalogo.obtener(articuloId);
@@ -82,10 +69,13 @@ export class VentaEngine {
       throw new Error('Usá "Venta libre" para cargar este tipo de artículo');
     }
 
+    if (articulo.esServicioComision) {
+      throw new Error('SERVICIO_COMISION');
+    }
+
     const existente = this.items.get(articuloId);
     const porPeso = articulo.unidad !== 'unidad';
 
-    // Aviso de stock: no bloquea, el stock del sistema puede estar viejo
     if (!porPeso) {
       const disponible = catalogo.stockDe(articuloId);
       const enCarrito = existente?.cantidad ?? 0;
@@ -121,11 +111,6 @@ export class VentaEngine {
     return { item, nuevo: true };
   }
 
-  /**
-   * Agrega una línea de venta libre: descripción y precio a mano,
-   * sin pasar por el catálogo ni descontar stock de ningún lado.
-   * Cada llamada crea una línea nueva, aunque la descripción se repita.
-   */
   agregarLibre(
     descripcion: string,
     precioUnitario: number,
@@ -152,6 +137,49 @@ export class VentaEngine {
       costoUnitarioSnapshot: 0,
       requiereCantidad: false,
       esGenerico: true,
+    };
+
+    this.items.set(item.lineaId, item);
+    this.emitir();
+    return item;
+  }
+
+  /**
+   * Quiniela, recargas de celular, etc: el cliente dice cuánto juega
+   * o carga, el sistema calcula solo cuánto de eso es ganancia según
+   * la comisión cargada en el artículo. El resto —lo que hay que
+   * rendir a la agencia o distribuidora— queda en el costo de la
+   * línea, así los reportes de margen ya muestran la ganancia real
+   * sin ningún cálculo aparte. No descuenta stock.
+   */
+  agregarServicio(articuloId: string, monto: number): ItemCarrito {
+    const articulo = catalogo.obtener(articuloId);
+    if (!articulo) throw new Error('Artículo no encontrado en el catálogo');
+    if (!articulo.esServicioComision) {
+      throw new Error('Este artículo no está configurado como servicio con comisión');
+    }
+
+    const m = Math.max(0, monto);
+    const comision = articulo.comisionPorcentaje ?? 0;
+
+    const costo = new Decimal(m)
+      .times(new Decimal(100).minus(comision))
+      .div(100)
+      .toDecimalPlaces(2)
+      .toNumber();
+
+    const item: ItemCarrito = {
+      lineaId: `servicio:${crypto.randomUUID()}`,
+      articuloId: articulo.id,
+      nombre: articulo.nombre,
+      unidad: 'unidad',
+      cantidad: 1,
+      precioUnitario: m,
+      descuentoPorcentaje: 0,
+      subtotal: m,
+      costoUnitarioSnapshot: costo,
+      requiereCantidad: false,
+      esServicio: true,
     };
 
     this.items.set(item.lineaId, item);
@@ -198,27 +226,12 @@ export class VentaEngine {
     this.emitir();
   }
 
-  /** Devuelve el aviso pendiente y lo limpia */
   consumirAvisoStock(): string | null {
     const aviso = this.avisoStock;
     this.avisoStock = null;
     return aviso;
   }
 
-  // ------------------------------------------------------------------
-  // Cobro
-  // ------------------------------------------------------------------
-
-  /**
-   * Cierra la venta. `pagos` es el desglose completo del cobro: una
-   * fila por método usado. Un pago simple manda un array de un solo
-   * elemento con el total; un pago combinado, varias filas que suman
-   * el total entre todas.
-   *
-   * El desglose es lo que le permite al cierre de caja distinguir
-   * cuánto entró realmente en efectivo de cuánto entró por otros
-   * medios, incluso cuando una sola venta mezcla varios.
-   */
   async cobrar(
     pagos: DesglosePago[],
     recibidoEfectivo?: number,
@@ -238,7 +251,6 @@ export class VentaEngine {
       new Decimal(0),
     );
 
-    // Tolerancia de un centavo por redondeos de punto flotante
     if (sumaPagos.minus(total).abs().greaterThan(0.01)) {
       throw new Error(
         `Los pagos suman ${sumaPagos.toFixed(2)} y el total es ${total.toFixed(2)}`,
@@ -271,10 +283,6 @@ export class VentaEngine {
       descuentoTotal: subtotal.minus(total).toDecimalPlaces(2).toNumber(),
       total: total.toDecimalPlaces(2).toNumber(),
       recibido: recibidoEfectivo ?? null,
-      // El vuelto sale de comparar lo recibido contra la PARTE en
-      // efectivo, no contra el total: si paga $2.000 efectivo + $3.000
-      // tarjeta de un total de $4.500, el vuelto se calcula sobre esos
-      // $2.000, no sobre los $4.500 completos.
       vuelto:
         recibidoEfectivo != null
           ? new Decimal(recibidoEfectivo)
@@ -290,10 +298,8 @@ export class VentaEngine {
 
     await dbLocal.ventas.put(venta);
 
-    // Descontar stock: en memoria (inmediato) y en la base local.
-    // Las líneas de venta libre no tienen stock que descontar.
     for (const item of items) {
-      if (item.esGenerico) continue;
+      if (item.esGenerico || item.esServicio) continue;
 
       catalogo.descontar(item.articuloId, item.cantidad);
 
@@ -306,9 +312,6 @@ export class VentaEngine {
       }
     }
 
-    // Venta con parte fiada: actualizar el saldo local del cliente.
-    // En el servidor lo hace el trigger; acá hace falta para que el
-    // cobrador no salga a la calle con el saldo de ayer.
     const parteCtaCte = pagos.find((p) => p.metodo === 'cuenta_corriente');
     if (parteCtaCte && cliente) {
       const local = await dbLocal.clientes.get(cliente.id);
@@ -331,15 +334,6 @@ export class VentaEngine {
     return venta;
   }
 
-  // ------------------------------------------------------------------
-  // Remito
-  // ------------------------------------------------------------------
-
-  /**
-   * Numera y marca el remito. Local, sin red.
-   * Si ya se emitió devuelve el mismo número: una reimpresión
-   * no consume un número nuevo del talonario.
-   */
   async emitirRemito(ventaId: string): Promise<string> {
     const venta = await dbLocal.ventas.get(ventaId);
     if (!venta) throw new Error('Venta no encontrada');
@@ -350,19 +344,11 @@ export class VentaEngine {
       `${String(this.puntoVenta).padStart(4, '0')}-${String(n).padStart(8, '0')}`;
 
     await dbLocal.ventas.update(ventaId, { remitoNumero: numero });
-
-    // Reencolar para que el número llegue al servidor.
-    // El RPC es idempotente: si la venta ya subió, solo actualiza el remito.
     await encolar('venta', { ...venta, remitoNumero: numero });
 
     return numero;
   }
 
-  // ------------------------------------------------------------------
-  // Internos
-  // ------------------------------------------------------------------
-
-  /** SUC01-20260817-000147 — contador local, sin consultar al servidor */
   private async numeroFactura(): Promise<string> {
     const hoy = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const n = await siguienteNumero(`factura:${this.codigoSucursal}:${hoy}`);
@@ -374,10 +360,6 @@ export class VentaEngine {
     const descuento = bruto.times(item.descuentoPorcentaje).div(100);
     return bruto.minus(descuento).toDecimalPlaces(2).toNumber();
   }
-
-  // ------------------------------------------------------------------
-  // Suscripción
-  // ------------------------------------------------------------------
 
   suscribir(fn: Escucha): () => void {
     this.escuchas.add(fn);

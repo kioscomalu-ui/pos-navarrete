@@ -7,15 +7,6 @@ import { createClient } from '@/lib/supabase-server';
 import { getSesion, puedeEditarCatalogo } from '@/lib/sesion';
 import { calcularPrecio, validarPrecio } from '@pos/shared/utils/calcular-precio';
 
-// ====================================================================
-// Validación
-// ====================================================================
-
-/**
- * Los checkbox de HTML no mandan nada cuando están destildados, y "on"
- * cuando están tildados. Para que el valor sea siempre explícito, el
- * formulario usa un campo oculto con "true" o "false" y acá se traduce.
- */
 const booleanoDeFormulario = z.preprocess(
   (v) => v === 'true' || v === 'on' || v === true,
   z.boolean(),
@@ -40,20 +31,18 @@ const esquema = z.object({
     'a_la_centena',
   ]),
 
-  // Precio fijado a mano: si está activo, manda sobre el cálculo
   precioManual: booleanoDeFormulario.optional(),
   precioFijo: z.coerce.number().min(0).optional(),
 
   stockMinimo: z.coerce.number().min(0),
   stockMaximo: z.coerce.number().min(0).optional(),
   proveedorId: z.string().uuid().optional().or(z.literal('')),
+
+  esServicioComision: booleanoDeFormulario.optional(),
+  comisionPorcentaje: z.coerce.number().min(0).max(100).optional(),
 });
 
 export type EstadoForm = { error?: string; campo?: string };
-
-// ====================================================================
-// Crear y editar
-// ====================================================================
 
 export async function guardarArticulo(
   _prev: EstadoForm,
@@ -71,13 +60,50 @@ export async function guardarArticulo(
   }
 
   const d = parsed.data;
+  const esServicio = !!d.esServicioComision;
+  const supabase = await createClient();
+  const id = formData.get('id') as string | null;
 
-  console.log('[articulo] crudo:', formData.get('precioManual'));
-  console.log('[articulo] parseado:', d.precioManual, '| precioFijo:', d.precioFijo);
+  if (esServicio) {
+    if (!d.comisionPorcentaje || d.comisionPorcentaje <= 0 || d.comisionPorcentaje > 100) {
+      return {
+        error: 'Ingresá una comisión entre 0 y 100',
+        campo: 'comisionPorcentaje',
+      };
+    }
 
-  // El precio lo resuelve el servidor: el navegador solo previsualiza.
-  // Con precio manual, el valor ingresado manda y no se recalcula nunca
-  // más desde el costo — ni acá ni en los ajustes masivos.
+    const fila = {
+      codigo_barras: null,
+      codigo_interno: null,
+      nombre: d.nombre,
+      descripcion: d.descripcion || null,
+      categoria_id: d.categoriaId || null,
+      unidad: 'unidad' as const,
+      costo_unitario: 0,
+      proveedor_principal_id: null,
+      margen_tipo: 'importe' as const,
+      margen_valor: 0,
+      precio_venta_base: 0,
+      redondeo_aplicado: 0,
+      precio_venta_final: 0,
+      precio_manual: false,
+      stock_minimo: 0,
+      stock_maximo: null,
+      es_servicio_comision: true,
+      comision_porcentaje: d.comisionPorcentaje,
+    };
+
+    const { error } = id
+      ? await supabase.from('articulos').update(fila).eq('id', id)
+      : await supabase.from('articulos').insert({ ...fila, activo: true });
+
+    if (error) return { error: error.message };
+
+    revalidatePath('/articulos');
+    if (id) revalidatePath(`/articulos/${id}`);
+    redirect('/articulos');
+  }
+
   const usarManual = !!d.precioManual && !!d.precioFijo && d.precioFijo > 0;
 
   if (d.precioManual && (!d.precioFijo || d.precioFijo <= 0)) {
@@ -100,8 +126,6 @@ export async function guardarArticulo(
         reglaRedondeo: d.reglaRedondeo,
       });
 
-  // La validación aplica igual con precio manual: fijarlo es una decisión,
-  // no una excusa para vender a pérdida sin verlo.
   const validacion = validarPrecio(d.costoUnitario, precio.precioFinal);
   if (!validacion.valido) {
     return {
@@ -109,9 +133,6 @@ export async function guardarArticulo(
       campo: usarManual ? 'precioFijo' : 'margenValor',
     };
   }
-
-  const supabase = await createClient();
-  const id = formData.get('id') as string | null;
 
   const fila = {
     codigo_barras: d.codigoBarras || null,
@@ -130,6 +151,8 @@ export async function guardarArticulo(
     precio_manual: usarManual,
     stock_minimo: d.stockMinimo,
     stock_maximo: d.stockMaximo || null,
+    es_servicio_comision: false,
+    comision_porcentaje: null,
   };
 
   const { error } = id
@@ -151,15 +174,6 @@ export async function guardarArticulo(
   redirect('/articulos');
 }
 
-// ====================================================================
-// Baja lógica
-// ====================================================================
-
-/**
- * Un artículo nunca se borra: el historial de ventas lo referencia.
- * Al desactivarlo desaparece del catálogo de la caja en la próxima
- * apertura, pero sigue apareciendo en los reportes históricos.
- */
 export async function alternarActivoArticulo(id: string, activo: boolean) {
   const sesion = await getSesion();
   if (!puedeEditarCatalogo(sesion.rol)) return;
@@ -171,14 +185,6 @@ export async function alternarActivoArticulo(id: string, activo: boolean) {
   revalidatePath(`/articulos/${id}`);
 }
 
-// ====================================================================
-// Stock
-// ====================================================================
-
-/**
- * Ajuste manual de stock, para conteos físicos o correcciones.
- * Queda registrado en historial_stock con el motivo y el usuario.
- */
 export async function ajustarStock(
   articuloId: string,
   cantidadNueva: number,
@@ -220,8 +226,6 @@ export async function ajustarStock(
 
   if (error) return { error: error.message };
 
-  // Dejar rastro: dentro de tres meses esto es lo único que permite
-  // reconstruir por qué el stock no cuadra.
   await supabase.from('historial_stock').insert({
     articulo_id: articuloId,
     sucursal_id: sesion.sucursalId,
@@ -237,10 +241,6 @@ export async function ajustarStock(
   revalidatePath('/reportes/faltantes');
   return {};
 }
-
-// ====================================================================
-// Categorías
-// ====================================================================
 
 export async function crearCategoria(nombre: string): Promise<EstadoForm> {
   const sesion = await getSesion();
@@ -266,15 +266,6 @@ export async function crearCategoria(nombre: string): Promise<EstadoForm> {
   return {};
 }
 
-// ====================================================================
-// Precio manual
-// ====================================================================
-
-/**
- * Saca la marca de precio manual: el artículo vuelve a calcular su
- * precio desde el costo y el margen. Para cuando la razón que motivó
- * fijarlo ya no aplica.
- */
 export async function liberarPrecioManual(
   articuloId: string,
 ): Promise<EstadoForm> {

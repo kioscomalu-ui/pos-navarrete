@@ -1,10 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import type { UnidadMedida } from '@pos/shared/types';
 
-// ====================================================================
-// Catálogo
-// ====================================================================
-
 export interface ArticuloLocal {
   id: string;
   codigoBarras: string | null;
@@ -15,16 +11,14 @@ export interface ArticuloLocal {
   precioVentaFinal: number;
   activo: boolean;
   esGenerico: boolean;
+  esServicioComision: boolean;
+  comisionPorcentaje: number | null;
 }
 
 export interface StockLocal {
   articuloId: string;
   cantidad: number;
 }
-
-// ====================================================================
-// Ventas
-// ====================================================================
 
 export interface ItemVentaLocal {
   articuloId: string;
@@ -36,13 +30,9 @@ export interface ItemVentaLocal {
   subtotal: number;
   costoUnitarioSnapshot: number;
   esGenerico?: boolean;
+  esServicio?: boolean;
 }
 
-/**
- * Una fila del desglose de pago de una venta. Toda venta guarda al
- * menos una: una venta simple tiene un solo elemento con el total
- * completo, una venta combinada tiene varias que suman el total.
- */
 export interface PagoVentaLocal {
   metodo: 'efectivo' | 'posnet' | 'billetera' | 'cuenta_corriente';
   monto: number;
@@ -68,10 +58,6 @@ export interface VentaLocal {
   syncedAt: string | null;
 }
 
-// ====================================================================
-// Cajas
-// ====================================================================
-
 export interface CajaLocal {
   id: string;
   vendedorId: string;
@@ -92,10 +78,6 @@ export interface CajaLocal {
   closedAt: string | null;
   syncedAt: string | null;
 }
-
-// ====================================================================
-// Cobranzas
-// ====================================================================
 
 export interface ClienteLocal {
   id: string;
@@ -123,10 +105,6 @@ export interface ReciboLocal {
   syncedAt: string | null;
 }
 
-// ====================================================================
-// Chat
-// ====================================================================
-
 export interface CanalLocal {
   id: string;
   nombre: string;
@@ -148,10 +126,6 @@ export interface MensajeLocal {
   estadoLocal: 'pendiente' | 'enviado';
 }
 
-// ====================================================================
-// Sincronización
-// ====================================================================
-
 export interface TareaSync {
   id: string;
   tipo: 'venta' | 'cobranza' | 'mensaje' | 'caja';
@@ -166,10 +140,6 @@ export interface Numerador {
   clave: string;
   valor: number;
 }
-
-// ====================================================================
-// Base
-// ====================================================================
 
 class DBLocal extends Dexie {
   articulos!: Table<ArticuloLocal, string>;
@@ -208,11 +178,6 @@ class DBLocal extends Dexie {
       mensajes: 'id, canalId, createdAt, estadoLocal',
     });
 
-    // Índice compuesto para encontrar la caja del día de un vendedor
-    // en una sola consulta. No se edita la definición de versiones
-    // anteriores: Dexie exige una versión nueva para cualquier
-    // cambio de índices, o rompe el esquema de quien ya tiene la
-    // app instalada.
     this.version(5).stores({
       cajas: 'id, fecha, estado, vendedorId, [vendedorId+fecha]',
     });
@@ -220,10 +185,6 @@ class DBLocal extends Dexie {
 }
 
 export const dbLocal = new DBLocal();
-
-// ====================================================================
-// Numeración local
-// ====================================================================
 
 export async function siguienteNumero(clave: string): Promise<number> {
   return dbLocal.transaction('rw', dbLocal.numeradores, async () => {
@@ -233,10 +194,6 @@ export async function siguienteNumero(clave: string): Promise<number> {
     return nuevo;
   });
 }
-
-// ====================================================================
-// Mantenimiento
-// ====================================================================
 
 export async function purgarLocal(diasRetencion = 45): Promise<number> {
   const corte = new Date();

@@ -35,6 +35,8 @@ interface Articulo {
   stock_maximo: number | null;
   proveedor_principal_id: string | null;
   activo: boolean;
+  es_servicio_comision: boolean;
+  comision_porcentaje: number | null;
 }
 
 interface Props {
@@ -57,6 +59,13 @@ export function FormArticulo({
   const [estado, accion, guardando] = useActionState<EstadoForm, FormData>(
     guardarArticulo,
     {},
+  );
+
+  const [esServicio, setEsServicio] = useState(
+    articulo?.es_servicio_comision ?? false,
+  );
+  const [comisionPorcentaje, setComisionPorcentaje] = useState(
+    Number(articulo?.comision_porcentaje ?? 15),
   );
 
   const [costo, setCosto] = useState(Number(articulo?.costo_unitario ?? 0));
@@ -98,21 +107,75 @@ export function FormArticulo({
 
   const margenBajo = margenReal.porcentaje < 10;
 
-  /** Los campos del cálculo se atenúan con precio manual, pero NUNCA
-   *  se deshabilitan: un campo disabled no se envía con el formulario
-   *  y la validación del servidor falla. */
   const atenuado = precioManual ? 'opacity-50' : '';
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
 
-      {/* ============================================================
-          Columna 1 · Formulario
-          ============================================================ */}
       <form action={accion} id="form-articulo" className="space-y-5">
         {articulo && <input type="hidden" name="id" value={articulo.id} />}
 
-        {/* --- Identificación --- */}
+        <section className="bg-mostrador rounded-lg ring-1 ring-tiza/60 p-6 space-y-3">
+          <input
+            type="hidden"
+            name="esServicioComision"
+            value={esServicio ? 'true' : 'false'}
+          />
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={esServicio}
+              onChange={(e) => {
+                setEsServicio(e.target.checked);
+                if (e.target.checked) setUnidad('unidad');
+              }}
+              className="accent-verde-esmalte"
+            />
+            <span className="text-sm font-medium">
+              Es un servicio con comisión (quiniela, recargas de celular…)
+            </span>
+          </label>
+
+          {esServicio && (
+            <>
+              <p className="text-xs text-verde-claro">
+                Sin stock ni precio fijo: el monto lo define el vendedor en
+                cada venta. Solo hace falta el porcentaje que queda de
+                ganancia — el resto es lo que se rinde después.
+              </p>
+
+              <Campo
+                label="Comisión (%)"
+                error={campoError(estado, 'comisionPorcentaje')}
+              >
+                <input
+                  name="comisionPorcentaje"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  value={comisionPorcentaje}
+                  onChange={(e) => setComisionPorcentaje(Number(e.target.value))}
+                  required={esServicio}
+                  className="input num text-right w-32"
+                />
+              </Campo>
+            </>
+          )}
+
+          {esServicio && (
+            <>
+              <input type="hidden" name="costoUnitario" value="0" />
+              <input type="hidden" name="margenTipo" value="importe" />
+              <input type="hidden" name="margenValor" value="0" />
+              <input type="hidden" name="reglaRedondeo" value="sin_redondeo" />
+              <input type="hidden" name="precioManual" value="false" />
+              <input type="hidden" name="stockMinimo" value="0" />
+            </>
+          )}
+        </section>
+
         <section className="bg-mostrador rounded-lg ring-1 ring-tiza/60 p-6 space-y-4">
           <h2 className="text-sm font-medium">Identificación</h2>
 
@@ -122,41 +185,42 @@ export function FormArticulo({
               defaultValue={articulo?.nombre}
               required
               autoFocus
+              placeholder={esServicio ? 'Ej: Loto, Recarga Movistar' : undefined}
               className="input"
             />
           </Campo>
 
-          <div className="grid grid-cols-2 gap-4">
-                        <Campo
-              label="Código de barras"
-              error={campoError(estado, 'codigoBarras')}
-              ayuda="Con el lector conectado, escaneá el producto acá"
-            >
-              <input
-                name="codigoBarras"
-                defaultValue={articulo?.codigo_barras ?? ''}
-                onKeyDown={(e) => {
-                  // El lector manda Enter al terminar: sin esto,
-                  // dispara el envío del formulario a medio completar
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    (e.currentTarget.closest('form') ?? document)
-                      .querySelector<HTMLInputElement>('input[name="nombre"]')
-                      ?.focus();
-                  }
-                }}
-                className="input num"
-              />
-            </Campo>
+          {!esServicio && (
+            <div className="grid grid-cols-2 gap-4">
+              <Campo
+                label="Código de barras"
+                error={campoError(estado, 'codigoBarras')}
+                ayuda="Con el lector conectado, escaneá el producto acá"
+              >
+                <input
+                  name="codigoBarras"
+                  defaultValue={articulo?.codigo_barras ?? ''}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      (e.currentTarget.closest('form') ?? document)
+                        .querySelector<HTMLInputElement>('input[name="nombre"]')
+                        ?.focus();
+                    }
+                  }}
+                  className="input num"
+                />
+              </Campo>
 
-            <Campo label="Código interno" ayuda="Opcional, para uso propio">
-              <input
-                name="codigoInterno"
-                defaultValue={articulo?.codigo_interno ?? ''}
-                className="input num"
-              />
-            </Campo>
-          </div>
+              <Campo label="Código interno" ayuda="Opcional, para uso propio">
+                <input
+                  name="codigoInterno"
+                  defaultValue={articulo?.codigo_interno ?? ''}
+                  className="input num"
+                />
+              </Campo>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <Campo label="Categoría">
@@ -174,49 +238,55 @@ export function FormArticulo({
               </select>
             </Campo>
 
+            {!esServicio && (
+              <Campo
+                label="Unidad de venta"
+                ayuda={
+                  unidad === 'unidad'
+                    ? 'Se escanea y se agrega de a uno'
+                    : 'La caja va a pedir la cantidad al escanear'
+                }
+              >
+                <select
+                  name="unidad"
+                  value={unidad}
+                  onChange={(e) => setUnidad(e.target.value as UnidadMedida)}
+                  className="input"
+                >
+                  <option value="unidad">Por unidad</option>
+                  <option value="kg">Por kilogramo</option>
+                  <option value="litro">Por litro</option>
+                  <option value="metro">Por metro</option>
+                </select>
+              </Campo>
+            )}
+          </div>
+
+          {esServicio && <input type="hidden" name="unidad" value="unidad" />}
+
+          {!esServicio && (
             <Campo
-              label="Unidad de venta"
+              label="Proveedor principal"
               ayuda={
-                unidad === 'unidad'
-                  ? 'Se escanea y se agrega de a uno'
-                  : 'La caja va a pedir la cantidad al escanear'
+                articulo
+                  ? 'Se cambia desde el panel de proveedores, más abajo'
+                  : 'Después vas a poder cargar varios proveedores'
               }
             >
               <select
-                name="unidad"
-                value={unidad}
-                onChange={(e) => setUnidad(e.target.value as UnidadMedida)}
+                name="proveedorId"
+                defaultValue={articulo?.proveedor_principal_id ?? ''}
                 className="input"
               >
-                <option value="unidad">Por unidad</option>
-                <option value="kg">Por kilogramo</option>
-                <option value="litro">Por litro</option>
-                <option value="metro">Por metro</option>
+                <option value="">Sin proveedor</option>
+                {proveedores.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}
+                  </option>
+                ))}
               </select>
             </Campo>
-          </div>
-
-          <Campo
-            label="Proveedor principal"
-            ayuda={
-              articulo
-                ? 'Se cambia desde el panel de proveedores, más abajo'
-                : 'Después vas a poder cargar varios proveedores'
-            }
-          >
-            <select
-              name="proveedorId"
-              defaultValue={articulo?.proveedor_principal_id ?? ''}
-              className="input"
-            >
-              <option value="">Sin proveedor</option>
-              {proveedores.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nombre}
-                </option>
-              ))}
-            </select>
-          </Campo>
+          )}
 
           <Campo label="Descripción" ayuda="Opcional">
             <input
@@ -227,213 +297,236 @@ export function FormArticulo({
           </Campo>
         </section>
 
-        {/* --- Costo y ganancia --- */}
-        <section className="bg-mostrador rounded-lg ring-1 ring-tiza/60 p-6 space-y-4">
-          <h2 className="text-sm font-medium">Costo y ganancia</h2>
+        {!esServicio && (
+          <section className="bg-mostrador rounded-lg ring-1 ring-tiza/60 p-6 space-y-4">
+            <h2 className="text-sm font-medium">Costo y ganancia</h2>
 
-          <div className="grid grid-cols-3 gap-4">
-            <Campo
-              label={
-                unidad === 'unidad' ? 'Costo por unidad' : `Costo por ${unidad}`
-              }
-            >
-              <input
-                name="costoUnitario"
-                type="number"
-                step="0.01"
-                min="0"
-                value={costo}
-                onChange={(e) => setCosto(Number(e.target.value))}
-                required
-                className="input num text-right"
-              />
-            </Campo>
+            <div className="grid grid-cols-3 gap-4">
+              <Campo
+                label={
+                  unidad === 'unidad' ? 'Costo por unidad' : `Costo por ${unidad}`
+                }
+              >
+                <input
+                  name="costoUnitario"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={costo}
+                  onChange={(e) => setCosto(Number(e.target.value))}
+                  required
+                  className="input num text-right"
+                />
+              </Campo>
 
-            <Campo label="Tipo de margen">
+              <Campo label="Tipo de margen">
+                <select
+                  name="margenTipo"
+                  value={margenTipo}
+                  onChange={(e) => setMargenTipo(e.target.value as MargenTipo)}
+                  className={`input ${atenuado}`}
+                >
+                  <option value="porcentaje">Porcentaje</option>
+                  <option value="importe">Importe fijo</option>
+                </select>
+              </Campo>
+
+              <Campo
+                label={margenTipo === 'porcentaje' ? 'Margen (%)' : 'Margen ($)'}
+                error={campoError(estado, 'margenValor')}
+              >
+                <input
+                  name="margenValor"
+                  type="number"
+                  step="0.01"
+                  value={margenValor}
+                  onChange={(e) => setMargenValor(Number(e.target.value))}
+                  required
+                  className={`input num text-right ${atenuado}`}
+                />
+              </Campo>
+            </div>
+
+            <Campo label="Redondeo">
               <select
-                name="margenTipo"
-                value={margenTipo}
-                onChange={(e) => setMargenTipo(e.target.value as MargenTipo)}
+                name="reglaRedondeo"
+                value={regla}
+                onChange={(e) => setRegla(e.target.value as ReglaRedondeo)}
                 className={`input ${atenuado}`}
               >
-                <option value="porcentaje">Porcentaje</option>
-                <option value="importe">Importe fijo</option>
+                <option value="sin_redondeo">Sin redondeo</option>
+                <option value="al_peso">Al peso entero</option>
+                <option value="al_cincuenta">A .00 o .50</option>
+                <option value="a_la_decena">A la decena</option>
+                <option value="a_la_centena">A la centena</option>
               </select>
             </Campo>
 
-            <Campo
-              label={margenTipo === 'porcentaje' ? 'Margen (%)' : 'Margen ($)'}
-              error={campoError(estado, 'margenValor')}
-            >
+            <div className="pt-4 border-t border-tiza/40 space-y-3">
               <input
-                name="margenValor"
-                type="number"
-                step="0.01"
-                value={margenValor}
-                onChange={(e) => setMargenValor(Number(e.target.value))}
-                required
-                className={`input num text-right ${atenuado}`}
+                type="hidden"
+                name="precioManual"
+                value={precioManual ? 'true' : 'false'}
               />
-            </Campo>
-          </div>
 
-          <Campo label="Redondeo">
-            <select
-              name="reglaRedondeo"
-              value={regla}
-              onChange={(e) => setRegla(e.target.value as ReglaRedondeo)}
-              className={`input ${atenuado}`}
-            >
-              <option value="sin_redondeo">Sin redondeo</option>
-              <option value="al_peso">Al peso entero</option>
-              <option value="al_cincuenta">A .00 o .50</option>
-              <option value="a_la_decena">A la decena</option>
-              <option value="a_la_centena">A la centena</option>
-            </select>
-          </Campo>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={precioManual}
+                  onChange={(e) => {
+                    setPrecioManual(e.target.checked);
+                    if (e.target.checked && !precioFijo) {
+                      setPrecioFijo(calculado.precioFinal);
+                    }
+                  }}
+                  className="accent-verde-esmalte"
+                />
+                <span className="text-sm">Fijar el precio de venta a mano</span>
+              </label>
 
-          {/* --- Precio fijado a mano --- */}
-          <div className="pt-4 border-t border-tiza/40 space-y-3">
-            {/* El valor viaja por acá: un checkbox destildado no manda nada */}
-            <input
-              type="hidden"
-              name="precioManual"
-              value={precioManual ? 'true' : 'false'}
-            />
+              {precioManual && (
+                <>
+                  <Campo
+                    label="Precio de venta"
+                    error={campoError(estado, 'precioFijo')}
+                  >
+                    <input
+                      name="precioFijo"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={precioFijo}
+                      onChange={(e) => setPrecioFijo(Number(e.target.value))}
+                      className="input num text-right text-lg"
+                    />
+                  </Campo>
 
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={precioManual}
-                onChange={(e) => {
-                  setPrecioManual(e.target.checked);
-                  if (e.target.checked && !precioFijo) {
-                    setPrecioFijo(calculado.precioFinal);
+                  <p className="text-xs text-ambar-dial">
+                    Este precio no se recalcula cuando sube el costo, ni siquiera
+                    en un ajuste masivo. El costo y el margen quedan como
+                    referencia.
+                  </p>
+                </>
+              )}
+            </div>
+          </section>
+        )}
+
+        {!esServicio && (
+          <section className="bg-mostrador rounded-lg ring-1 ring-tiza/60 p-6 space-y-4">
+            <h2 className="text-sm font-medium">Stock</h2>
+
+            <div className="grid grid-cols-2 gap-4">
+              <Campo
+                label="Stock mínimo"
+                ayuda="Debajo de este número aparece en Faltantes"
+              >
+                <input
+                  name="stockMinimo"
+                  type="number"
+                  step="0.001"
+                  min="0"
+                  defaultValue={Number(articulo?.stock_minimo ?? 0)}
+                  className="input num text-right"
+                />
+              </Campo>
+
+              <Campo label="Stock máximo" ayuda="Opcional, referencia de compra">
+                <input
+                  name="stockMaximo"
+                  type="number"
+                  step="0.001"
+                  min="0"
+                  defaultValue={
+                    articulo?.stock_maximo != null
+                      ? Number(articulo.stock_maximo)
+                      : ''
                   }
-                }}
-                className="accent-verde-esmalte"
-              />
-              <span className="text-sm">Fijar el precio de venta a mano</span>
-            </label>
-
-            {precioManual && (
-              <>
-                <Campo
-                  label="Precio de venta"
-                  error={campoError(estado, 'precioFijo')}
-                >
-                  <input
-                    name="precioFijo"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={precioFijo}
-                    onChange={(e) => setPrecioFijo(Number(e.target.value))}
-                    className="input num text-right text-lg"
-                  />
-                </Campo>
-
-                <p className="text-xs text-ambar-dial">
-                  Este precio no se recalcula cuando sube el costo, ni siquiera
-                  en un ajuste masivo. El costo y el margen quedan como
-                  referencia.
-                </p>
-              </>
-            )}
-          </div>
-        </section>
-
-        {/* --- Stock --- */}
-        <section className="bg-mostrador rounded-lg ring-1 ring-tiza/60 p-6 space-y-4">
-          <h2 className="text-sm font-medium">Stock</h2>
-
-          <div className="grid grid-cols-2 gap-4">
-            <Campo
-              label="Stock mínimo"
-              ayuda="Debajo de este número aparece en Faltantes"
-            >
-              <input
-                name="stockMinimo"
-                type="number"
-                step="0.001"
-                min="0"
-                defaultValue={Number(articulo?.stock_minimo ?? 0)}
-                className="input num text-right"
-              />
-            </Campo>
-
-            <Campo label="Stock máximo" ayuda="Opcional, referencia de compra">
-              <input
-                name="stockMaximo"
-                type="number"
-                step="0.001"
-                min="0"
-                defaultValue={
-                  articulo?.stock_maximo != null
-                    ? Number(articulo.stock_maximo)
-                    : ''
-                }
-                className="input num text-right"
-              />
-            </Campo>
-          </div>
-        </section>
+                  className="input num text-right"
+                />
+              </Campo>
+            </div>
+          </section>
+        )}
       </form>
 
-      {/* ============================================================
-          Columna 2 · Panel lateral
-          ============================================================ */}
       <aside className="space-y-3 lg:sticky lg:top-20">
         <div className="bg-verde-esmalte rounded-lg overflow-hidden shadow-lg">
           <div
-            className={`h-1 ${margenBajo ? 'bg-rojo-plomo' : 'bg-verde-claro/40'}`}
+            className={`h-1 ${
+              !esServicio && margenBajo ? 'bg-rojo-plomo' : 'bg-verde-claro/40'
+            }`}
           />
 
           <div className="p-5 space-y-3">
-            <div className="text-[0.65rem] uppercase tracking-[0.18em] text-tiza/70">
-              {precioManual ? 'Precio fijado' : 'Precio calculado'}
-            </div>
-
-            {precioManual ? (
-              <p className="text-xs text-tiza/70">
-                Ingresado a mano. El costo y el margen quedan como referencia.
-              </p>
+            {esServicio ? (
+              <>
+                <div className="text-[0.65rem] uppercase tracking-[0.18em] text-tiza/70">
+                  Servicio con comisión
+                </div>
+                <p className="text-xs text-tiza/70">
+                  El monto lo carga el vendedor en cada venta. De cada $100
+                  jugados o cargados, quedan{' '}
+                  <span className="text-white font-medium">
+                    {formatearPrecio(comisionPorcentaje)}
+                  </span>{' '}
+                  de ganancia.
+                </p>
+                <div className="border-t border-white/15 pt-3 flex items-baseline justify-between">
+                  <span className="text-xs text-tiza/70">Comisión</span>
+                  <span className="num text-2xl font-bold text-white">
+                    {comisionPorcentaje}%
+                  </span>
+                </div>
+              </>
             ) : (
-              <dl className="num text-sm space-y-1.5 text-tiza">
-                <Fila etiqueta="Costo" valor={formatearPrecio(costo)} />
-                <Fila
-                  etiqueta={
-                    margenTipo === 'porcentaje'
-                      ? `+ ${margenValor}%`
-                      : `+ $${margenValor}`
-                  }
-                  valor={formatearPrecio(calculado.precioBase - costo)}
-                />
-                <Fila
-                  etiqueta="Redondeo"
-                  valor={`${calculado.redondeoAplicado >= 0 ? '+' : ''}${formatearPrecio(
-                    calculado.redondeoAplicado,
-                  )}`}
-                />
-              </dl>
+              <>
+                <div className="text-[0.65rem] uppercase tracking-[0.18em] text-tiza/70">
+                  {precioManual ? 'Precio fijado' : 'Precio calculado'}
+                </div>
+
+                {precioManual ? (
+                  <p className="text-xs text-tiza/70">
+                    Ingresado a mano. El costo y el margen quedan como referencia.
+                  </p>
+                ) : (
+                  <dl className="num text-sm space-y-1.5 text-tiza">
+                    <Fila etiqueta="Costo" valor={formatearPrecio(costo)} />
+                    <Fila
+                      etiqueta={
+                        margenTipo === 'porcentaje'
+                          ? `+ ${margenValor}%`
+                          : `+ $${margenValor}`
+                      }
+                      valor={formatearPrecio(calculado.precioBase - costo)}
+                    />
+                    <Fila
+                      etiqueta="Redondeo"
+                      valor={`${calculado.redondeoAplicado >= 0 ? '+' : ''}${formatearPrecio(
+                        calculado.redondeoAplicado,
+                      )}`}
+                    />
+                  </dl>
+                )}
+
+                <div className="border-t border-white/15 pt-3">
+                  <div className="flex items-baseline justify-between">
+                    <span className="text-xs text-tiza/70">Precio de venta</span>
+                    <span className="num text-2xl font-bold text-white">
+                      {formatearPrecio(precioMostrado)}
+                    </span>
+                  </div>
+
+                  <p
+                    className={`num text-xs mt-1 text-right ${
+                      margenBajo ? 'text-ambar-dial' : 'text-tiza/60'
+                    }`}
+                  >
+                    margen real {margenReal.porcentaje}%
+                  </p>
+                </div>
+              </>
             )}
-
-            <div className="border-t border-white/15 pt-3">
-              <div className="flex items-baseline justify-between">
-                <span className="text-xs text-tiza/70">Precio de venta</span>
-                <span className="num text-2xl font-bold text-white">
-                  {formatearPrecio(precioMostrado)}
-                </span>
-              </div>
-
-              <p
-                className={`num text-xs mt-1 text-right ${
-                  margenBajo ? 'text-ambar-dial' : 'text-tiza/60'
-                }`}
-              >
-                margen real {margenReal.porcentaje}%
-              </p>
-            </div>
           </div>
         </div>
 
@@ -468,22 +561,20 @@ export function FormArticulo({
 
         {articulo && (
           <>
-            <AjusteStock
-              articuloId={articulo.id}
-              unidad={articulo.unidad}
-              stockActual={stockActual ?? 0}
-            />
+            {!esServicio && (
+              <AjusteStock
+                articuloId={articulo.id}
+                unidad={articulo.unidad}
+                stockActual={stockActual ?? 0}
+              />
+            )}
             <HistorialCostos articuloId={articulo.id} />
             <BajaArticulo id={articulo.id} activo={articulo.activo} />
           </>
         )}
       </aside>
 
-      {/* ============================================================
-          Fila 2 · Proveedores
-          Fuera del <form> porque tiene sus propias acciones.
-          ============================================================ */}
-      {articulo && (
+      {articulo && !esServicio && (
         <div className="lg:col-start-1 lg:row-start-2">
           <ProveedoresArticulo
             articuloId={articulo.id}
@@ -494,10 +585,6 @@ export function FormArticulo({
     </div>
   );
 }
-
-// ====================================================================
-// Ajuste de stock
-// ====================================================================
 
 function AjusteStock({
   articuloId,
@@ -617,10 +704,6 @@ function AjusteStock({
   );
 }
 
-// ====================================================================
-// Baja lógica
-// ====================================================================
-
 function BajaArticulo({ id, activo }: { id: string; activo: boolean }) {
   const [confirmando, setConfirmando] = useState(false);
   const [pendiente, startTransition] = useTransition();
@@ -692,10 +775,6 @@ function BajaArticulo({ id, activo }: { id: string; activo: boolean }) {
     </div>
   );
 }
-
-// ====================================================================
-// Auxiliares
-// ====================================================================
 
 function campoError(estado: EstadoForm, campo: string) {
   return estado.campo === campo ? estado.error : undefined;
