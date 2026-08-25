@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase-server';
 import { getSesion } from '@/lib/sesion';
 import { resolverRango } from '@/lib/rangos-fecha';
@@ -13,27 +14,52 @@ interface FilaArticulo {
   costo: number;
   margen: number;
   margen_porcentaje: number;
+  total_filas: number;
 }
+
+const POR_PAGINA = 50;
 
 export default async function ReporteArticulos({
   searchParams,
 }: {
-  searchParams: Promise<{ rango?: string; desde?: string; hasta?: string }>;
+  searchParams: Promise<{
+    rango?: string;
+    desde?: string;
+    hasta?: string;
+    pagina?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const rango = resolverRango(sp.rango, sp.desde, sp.hasta);
   const sesion = await getSesion();
   const supabase = await createClient();
 
+  const pagina = Math.max(1, Number(sp.pagina) || 1);
+  const offset = (pagina - 1) * POR_PAGINA;
+
   const { data } = await supabase.rpc('reporte_articulos_periodo', {
     p_desde: rango.desde,
     p_hasta: rango.hasta,
     p_sucursal_id: sesion.rol === 'admin' ? null : sesion.sucursalId,
-    p_limite: 40,
+    p_limite: POR_PAGINA,
+    p_offset: offset,
   });
 
   const filas = (data ?? []) as FilaArticulo[];
+  const totalFilas = filas[0]?.total_filas ?? 0;
+  const totalPaginas = Math.max(1, Math.ceil(totalFilas / POR_PAGINA));
+
   const margenTotal = filas.reduce((a, f) => a + Number(f.margen), 0);
+
+  function urlPagina(p: number): string {
+    const params = new URLSearchParams();
+    if (sp.rango) params.set('rango', sp.rango);
+    if (sp.desde) params.set('desde', sp.desde);
+    if (sp.hasta) params.set('hasta', sp.hasta);
+    if (p > 1) params.set('pagina', String(p));
+    const qs = params.toString();
+    return qs ? `/reportes/articulos?${qs}` : '/reportes/articulos';
+  }
 
   return (
     <div className="space-y-6">
@@ -41,11 +67,15 @@ export default async function ReporteArticulos({
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Tarjeta
-          etiqueta="Facturado"
+          etiqueta="Facturado (esta página)"
           valor={formatearPrecio(filas.reduce((a, f) => a + Number(f.facturado), 0))}
         />
-        <Tarjeta etiqueta="Margen bruto" valor={formatearPrecio(margenTotal)} destacar />
-        <Tarjeta etiqueta="Artículos distintos" valor={String(filas.length)} />
+        <Tarjeta
+          etiqueta="Margen bruto (esta página)"
+          valor={formatearPrecio(margenTotal)}
+          destacar
+        />
+        <Tarjeta etiqueta="Artículos distintos" valor={String(totalFilas)} />
       </div>
 
       <div className="bg-white border border-neutral-200 rounded overflow-hidden">
@@ -65,7 +95,7 @@ export default async function ReporteArticulos({
                 <tr key={f.articulo_id} className="hover:bg-neutral-50">
                   <td className="px-4 py-2.5">
                     <span className="text-neutral-400 font-mono text-xs mr-2">
-                      {i + 1}
+                      {offset + i + 1}
                     </span>
                     {f.nombre}
                   </td>
@@ -104,13 +134,49 @@ export default async function ReporteArticulos({
           </p>
         )}
       </div>
+
+      {totalPaginas > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <Link
+            href={urlPagina(pagina - 1)}
+            aria-disabled={pagina <= 1}
+            className={`px-3 py-2 text-sm rounded border border-neutral-200 bg-white ${
+              pagina <= 1 ? 'pointer-events-none opacity-30' : 'hover:bg-neutral-50'
+            }`}
+          >
+            ← Anterior
+          </Link>
+
+          <span className="text-sm text-neutral-500 px-2 font-mono">
+            {pagina} / {totalPaginas}
+          </span>
+
+          <Link
+            href={urlPagina(pagina + 1)}
+            aria-disabled={pagina >= totalPaginas}
+            className={`px-3 py-2 text-sm rounded border border-neutral-200 bg-white ${
+              pagina >= totalPaginas
+                ? 'pointer-events-none opacity-30'
+                : 'hover:bg-neutral-50'
+            }`}
+          >
+            Siguiente →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
 
 function Tarjeta({
-  etiqueta, valor, destacar,
-}: { etiqueta: string; valor: string; destacar?: boolean }) {
+  etiqueta,
+  valor,
+  destacar,
+}: {
+  etiqueta: string;
+  valor: string;
+  destacar?: boolean;
+}) {
   return (
     <div className="bg-white border border-neutral-200 rounded p-4">
       <div className="text-xs text-neutral-500">{etiqueta}</div>
