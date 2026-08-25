@@ -102,7 +102,7 @@ export default async function ReporteArqueos({
 
       <div className="bg-white border border-neutral-200 rounded overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[34rem]">
+          <table className="w-full text-sm min-w-[40rem]">
             <thead className="bg-neutral-50 text-neutral-500 text-xs uppercase tracking-wide">
               <tr>
                 <th className="text-left font-medium px-4 py-2.5">Fecha</th>
@@ -110,12 +110,19 @@ export default async function ReporteArqueos({
                 <th className="text-right font-medium px-4 py-2.5">Inicial</th>
                 <th className="text-right font-medium px-4 py-2.5">Ventas</th>
                 <th className="text-right font-medium px-4 py-2.5">Contado</th>
+                <th className="text-right font-medium px-4 py-2.5">Neto a rendir</th>
                 <th className="text-right font-medium px-4 py-2.5">Diferencia</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
               {filas.map((f) => {
                 const dif = Number(f.diferencia ?? 0);
+
+                const neto =
+                  f.efectivo_final != null
+                    ? Number(f.efectivo_final) - Number(f.efectivo_inicial)
+                    : null;
+
                 return (
                   <tr key={f.caja_id} className="hover:bg-neutral-50">
                     <td className="px-4 py-2.5">
@@ -145,6 +152,9 @@ export default async function ReporteArqueos({
                       {f.efectivo_final != null
                         ? formatearPrecio(Number(f.efectivo_final))
                         : '—'}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono font-semibold">
+                      {neto != null ? formatearPrecio(neto) : '—'}
                     </td>
                     <td
                       className={`px-4 py-2.5 text-right font-mono font-medium ${
