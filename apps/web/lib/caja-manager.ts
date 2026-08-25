@@ -82,7 +82,9 @@ export async function cajaAbierta(vendedorId: string): Promise<CajaLocal | null>
 
   if (abiertas.length === 0) return null;
 
-  return abiertas.sort((a, b) => b.fecha.localeCompare(a.fecha))[0];
+  // La más vieja primero: se resuelven en el orden en que se
+  // acumularon, no al revés.
+  return abiertas.sort((a, b) => a.fecha.localeCompare(b.fecha))[0];
 }
 
 // ====================================================================
