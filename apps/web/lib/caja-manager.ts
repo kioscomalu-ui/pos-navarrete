@@ -66,22 +66,27 @@ export async function abrirCaja(
   return caja;
 }
 
+/**
+ * La caja abierta de este vendedor — de HOY o de un día anterior que
+ * quedó sin cerrar. Buscar solo por la fecha de hoy dejaba una caja
+ * de ayer huérfana para siempre: el sistema ofrecía abrir una nueva
+ * en vez de ofrecer cerrar la vieja, y esa caja nunca terminaba de
+ * completarse con sus valores finales.
+ */
 export async function cajaAbierta(vendedorId: string): Promise<CajaLocal | null> {
-  const fecha = new Date().toISOString().slice(0, 10);
+  const abiertas = await dbLocal.cajas
+    .where('vendedorId')
+    .equals(vendedorId)
+    .filter((c) => c.estado === 'abierta')
+    .toArray();
 
-  const caja = await dbLocal.cajas
-    .where('[vendedorId+fecha]')
-    .equals([vendedorId, fecha])
-    .first();
+  if (abiertas.length === 0) return null;
 
-  return caja && caja.estado === 'abierta' ? caja : null;
+  return abiertas.sort((a, b) => b.fecha.localeCompare(a.fecha))[0];
 }
 
 // ====================================================================
 // Movimientos: pago a proveedor y transferencias entre cajas.
-// No funcionan offline: son admin/gerente moviendo efectivo real, y
-// una transferencia necesita confirmar en el momento que la otra
-// caja sigue abierta.
 // ====================================================================
 
 export async function pagarProveedor(
