@@ -21,10 +21,6 @@ export interface DeclaracionCierre {
   notas: string;
 }
 
-// ====================================================================
-// Apertura
-// ====================================================================
-
 export async function abrirCaja(
   vendedorId: string,
   sucursalId: string,
@@ -66,13 +62,6 @@ export async function abrirCaja(
   return caja;
 }
 
-/**
- * La caja abierta de este vendedor — de HOY o de un día anterior que
- * quedó sin cerrar. Buscar solo por la fecha de hoy dejaba una caja
- * de ayer huérfana para siempre: el sistema ofrecía abrir una nueva
- * en vez de ofrecer cerrar la vieja, y esa caja nunca terminaba de
- * completarse con sus valores finales.
- */
 export async function cajaAbierta(vendedorId: string): Promise<CajaLocal | null> {
   const abiertas = await dbLocal.cajas
     .where('vendedorId')
@@ -82,14 +71,8 @@ export async function cajaAbierta(vendedorId: string): Promise<CajaLocal | null>
 
   if (abiertas.length === 0) return null;
 
-  // La más vieja primero: se resuelven en el orden en que se
-  // acumularon, no al revés.
   return abiertas.sort((a, b) => a.fecha.localeCompare(b.fecha))[0];
 }
-
-// ====================================================================
-// Movimientos: pago a proveedor y transferencias entre cajas.
-// ====================================================================
 
 export async function pagarProveedor(
   cajaId: string,
@@ -151,11 +134,38 @@ async function movimientosDeCaja(
   return data ?? [];
 }
 
-// ====================================================================
-// Totales del día
-// ====================================================================
+interface TotalesVentas {
+  cantidadVentas: number;
+  total: number;
+  efectivo: number;
+  billetera: number;
+  posnet: number;
+  ctaCte: number;
+}
 
-export async function totalesDelDia(caja: CajaLocal): Promise<TotalesDia> {
+async function totalesVentasDelServidor(
+  vendedorId: string,
+  fecha: string,
+): Promise<TotalesVentas | null> {
+  const { data, error } = await supabase.rpc('totales_caja_dia', {
+    p_vendedor_id: vendedorId,
+    p_fecha: fecha,
+  });
+
+  if (error || !data || data.length === 0) return null;
+
+  const r = data[0];
+  return {
+    cantidadVentas: Number(r.cantidad_ventas),
+    total: Number(r.total_ventas),
+    efectivo: Number(r.total_efectivo),
+    posnet: Number(r.total_posnet),
+    billetera: Number(r.total_billetera),
+    ctaCte: Number(r.total_cta_cte),
+  };
+}
+
+async function totalesVentasLocal(caja: CajaLocal): Promise<TotalesVentas> {
   const ventas = await dbLocal.ventas
     .where('fecha')
     .between(`${caja.fecha}T00:00:00`, `${caja.fecha}T23:59:59`)
@@ -170,7 +180,6 @@ export async function totalesDelDia(caja: CajaLocal): Promise<TotalesDia> {
 
   for (const v of ventas) {
     total += v.total;
-
     for (const p of v.pagos ?? []) {
       if (p.metodo === 'efectivo') efectivo += p.monto;
       if (p.metodo === 'billetera') billetera += p.monto;
@@ -178,6 +187,19 @@ export async function totalesDelDia(caja: CajaLocal): Promise<TotalesDia> {
       if (p.metodo === 'cuenta_corriente') ctaCte += p.monto;
     }
   }
+
+  return { cantidadVentas: ventas.length, total, efectivo, posnet, billetera, ctaCte };
+}
+
+/**
+ * El servidor es la fuente de verdad: tiene las ventas de ese
+ * vendedor y esa fecha, sin importar en qué dispositivo se hicieron
+ * ni si el que está cerrando ahora conserva esa historia en su
+ * IndexedDB. Local queda solo como respaldo si no hay conexión.
+ */
+export async function totalesDelDia(caja: CajaLocal): Promise<TotalesDia> {
+  const delServidor = await totalesVentasDelServidor(caja.vendedorId, caja.fecha);
+  const ventas = delServidor ?? (await totalesVentasLocal(caja));
 
   let egresos = 0;
   let ingresos = 0;
@@ -201,21 +223,17 @@ export async function totalesDelDia(caja: CajaLocal): Promise<TotalesDia> {
   const r2 = (n: number) => Math.round(n * 100) / 100;
 
   return {
-    cantidadVentas: ventas.length,
-    total: r2(total),
-    efectivo: r2(efectivo),
-    efectivoEsperado: r2(caja.efectivoInicial + efectivo + ingresos - egresos),
-    billetera: r2(billetera),
-    posnet: r2(posnet),
-    ctaCte: r2(ctaCte),
+    cantidadVentas: ventas.cantidadVentas,
+    total: r2(ventas.total),
+    efectivo: r2(ventas.efectivo),
+    efectivoEsperado: r2(caja.efectivoInicial + ventas.efectivo + ingresos - egresos),
+    billetera: r2(ventas.billetera),
+    posnet: r2(ventas.posnet),
+    ctaCte: r2(ventas.ctaCte),
     egresos: r2(egresos),
     ingresos: r2(ingresos),
   };
 }
-
-// ====================================================================
-// Cierre
-// ====================================================================
 
 export async function cerrarCaja(
   caja: CajaLocal,
