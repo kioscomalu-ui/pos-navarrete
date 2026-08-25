@@ -112,6 +112,7 @@ export default async function ReporteArticulos({
               <tr>
                 <ThOrden campo="nombre" label="Artículo" orden={orden} direccion={direccion} urlOrden={urlOrden} align="left" />
                 <ThOrden campo="cantidad" label="Vendido" orden={orden} direccion={direccion} urlOrden={urlOrden} />
+                <ThOrden campo="costo" label="Costo" orden={orden} direccion={direccion} urlOrden={urlOrden} />
                 <ThOrden campo="facturado" label="Facturado" orden={orden} direccion={direccion} urlOrden={urlOrden} />
                 <ThOrden campo="margen" label="Margen" orden={orden} direccion={direccion} urlOrden={urlOrden} />
                 <ThOrden campo="porcentaje" label="%" orden={orden} direccion={direccion} urlOrden={urlOrden} />
@@ -133,6 +134,9 @@ export default async function ReporteArticulos({
                     <span className="text-xs text-neutral-400 ml-1">
                       {f.unidad === 'unidad' ? 'un' : f.unidad}
                     </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
+                    {formatearPrecio(Number(f.costo))}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono">
                     {formatearPrecio(Number(f.facturado))}
