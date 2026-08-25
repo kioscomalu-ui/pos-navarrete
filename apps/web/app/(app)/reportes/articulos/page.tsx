@@ -27,6 +27,8 @@ export default async function ReporteArticulos({
     desde?: string;
     hasta?: string;
     pagina?: string;
+    orden?: string;
+    dir?: string;
   }>;
 }) {
   const sp = await searchParams;
@@ -36,6 +38,8 @@ export default async function ReporteArticulos({
 
   const pagina = Math.max(1, Number(sp.pagina) || 1);
   const offset = (pagina - 1) * POR_PAGINA;
+  const orden = sp.orden ?? 'facturado';
+  const direccion = sp.dir === 'asc' ? 'asc' : 'desc';
 
   const { data } = await supabase.rpc('reporte_articulos_periodo', {
     p_desde: rango.desde,
@@ -43,6 +47,8 @@ export default async function ReporteArticulos({
     p_sucursal_id: sesion.rol === 'admin' ? null : sesion.sucursalId,
     p_limite: POR_PAGINA,
     p_offset: offset,
+    p_orden: orden,
+    p_direccion: direccion,
   });
 
   const filas = (data ?? []) as FilaArticulo[];
@@ -56,9 +62,30 @@ export default async function ReporteArticulos({
     if (sp.rango) params.set('rango', sp.rango);
     if (sp.desde) params.set('desde', sp.desde);
     if (sp.hasta) params.set('hasta', sp.hasta);
+    if (sp.orden) params.set('orden', sp.orden);
+    if (sp.dir) params.set('dir', sp.dir);
     if (p > 1) params.set('pagina', String(p));
     const qs = params.toString();
     return qs ? `/reportes/articulos?${qs}` : '/reportes/articulos';
+  }
+
+  function urlOrden(campo: string): string {
+    const params = new URLSearchParams();
+    if (sp.rango) params.set('rango', sp.rango);
+    if (sp.desde) params.set('desde', sp.desde);
+    if (sp.hasta) params.set('hasta', sp.hasta);
+
+    const mismaColumna = orden === campo;
+    const dirPorDefecto = campo === 'nombre' ? 'asc' : 'desc';
+    const nuevaDireccion = mismaColumna
+      ? direccion === 'asc'
+        ? 'desc'
+        : 'asc'
+      : dirPorDefecto;
+
+    params.set('orden', campo);
+    params.set('dir', nuevaDireccion);
+    return `/reportes/articulos?${params.toString()}`;
   }
 
   return (
@@ -83,11 +110,11 @@ export default async function ReporteArticulos({
           <table className="w-full text-sm min-w-[32rem]">
             <thead className="bg-neutral-50 text-neutral-500 text-xs uppercase tracking-wide">
               <tr>
-                <th className="text-left font-medium px-4 py-2.5">Artículo</th>
-                <th className="text-right font-medium px-4 py-2.5">Vendido</th>
-                <th className="text-right font-medium px-4 py-2.5">Facturado</th>
-                <th className="text-right font-medium px-4 py-2.5">Margen</th>
-                <th className="text-right font-medium px-4 py-2.5">%</th>
+                <ThOrden campo="nombre" label="Artículo" orden={orden} direccion={direccion} urlOrden={urlOrden} align="left" />
+                <ThOrden campo="cantidad" label="Vendido" orden={orden} direccion={direccion} urlOrden={urlOrden} />
+                <ThOrden campo="facturado" label="Facturado" orden={orden} direccion={direccion} urlOrden={urlOrden} />
+                <ThOrden campo="margen" label="Margen" orden={orden} direccion={direccion} urlOrden={urlOrden} />
+                <ThOrden campo="porcentaje" label="%" orden={orden} direccion={direccion} urlOrden={urlOrden} />
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
@@ -165,6 +192,38 @@ export default async function ReporteArticulos({
         </div>
       )}
     </div>
+  );
+}
+
+function ThOrden({
+  campo,
+  label,
+  orden,
+  direccion,
+  urlOrden,
+  align = 'right',
+}: {
+  campo: string;
+  label: string;
+  orden: string;
+  direccion: string;
+  urlOrden: (campo: string) => string;
+  align?: 'left' | 'right';
+}) {
+  const activo = orden === campo;
+
+  return (
+    <th className={`font-medium px-4 py-2.5 text-${align}`}>
+      <Link
+        href={urlOrden(campo)}
+        className={`inline-flex items-center gap-1 hover:text-neutral-900 ${
+          activo ? 'text-neutral-900' : ''
+        }`}
+      >
+        {label}
+        {activo && <span className="text-[0.65rem]">{direccion === 'asc' ? '▲' : '▼'}</span>}
+      </Link>
+    </th>
   );
 }
 
