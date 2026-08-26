@@ -21,12 +21,32 @@ export interface DeclaracionCierre {
   notas: string;
 }
 
+/**
+ * La fecha de HOY en hora local, no en UTC.
+ *
+ * toISOString() siempre convierte a UTC: en Argentina (UTC-3), una
+ * caja abierta a las 21:30 del martes quedaría registrada como
+ * miércoles. Para un comercio que cierra tarde, eso significa ventas
+ * apareciendo en el día equivocado.
+ */
+function fechaLocalHoy(): string {
+  const d = new Date();
+  const anio = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${anio}-${mes}-${dia}`;
+}
+
+// ====================================================================
+// Apertura
+// ====================================================================
+
 export async function abrirCaja(
   vendedorId: string,
   sucursalId: string,
   efectivoInicial: number,
 ): Promise<CajaLocal> {
-  const fecha = new Date().toISOString().slice(0, 10);
+  const fecha = fechaLocalHoy();
 
   const existente = await dbLocal.cajas
     .where('[vendedorId+fecha]')
@@ -62,6 +82,11 @@ export async function abrirCaja(
   return caja;
 }
 
+/**
+ * La caja abierta de este vendedor — de HOY o de un día anterior que
+ * quedó sin cerrar. Buscar solo por la fecha de hoy dejaba una caja
+ * de ayer huérfana para siempre.
+ */
 export async function cajaAbierta(vendedorId: string): Promise<CajaLocal | null> {
   const abiertas = await dbLocal.cajas
     .where('vendedorId')
@@ -71,8 +96,14 @@ export async function cajaAbierta(vendedorId: string): Promise<CajaLocal | null>
 
   if (abiertas.length === 0) return null;
 
+  // La más vieja primero: se resuelven en el orden en que se
+  // acumularon, no al revés.
   return abiertas.sort((a, b) => a.fecha.localeCompare(b.fecha))[0];
 }
+
+// ====================================================================
+// Movimientos: pago a proveedor y transferencias entre cajas
+// ====================================================================
 
 export async function pagarProveedor(
   cajaId: string,
@@ -133,6 +164,10 @@ async function movimientosDeCaja(
 
   return data ?? [];
 }
+
+// ====================================================================
+// Totales del día
+// ====================================================================
 
 interface TotalesVentas {
   cantidadVentas: number;
@@ -234,6 +269,10 @@ export async function totalesDelDia(caja: CajaLocal): Promise<TotalesDia> {
     ingresos: r2(ingresos),
   };
 }
+
+// ====================================================================
+// Cierre
+// ====================================================================
 
 export async function cerrarCaja(
   caja: CajaLocal,
