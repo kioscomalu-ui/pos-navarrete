@@ -21,6 +21,7 @@ interface Props {
 
 export function CierreCaja({ caja, umbralDiferencia, onCerrar, onVolver, cargando }: Props) {
   const [totales, setTotales] = useState<TotalesDia | null>(null);
+  const [errorTotales, setErrorTotales] = useState('');
   const [declarado, setDeclarado] = useState(false);
 
   const [efectivo, setEfectivo] = useState('');
@@ -28,9 +29,42 @@ export function CierreCaja({ caja, umbralDiferencia, onCerrar, onVolver, cargand
   const [posnet, setPosnet] = useState('');
   const [notas, setNotas] = useState('');
 
+  function cargarTotales() {
+    setErrorTotales('');
+    setTotales(null);
+    totalesDelDia(caja)
+      .then(setTotales)
+      .catch((e) => {
+        setErrorTotales(
+          e instanceof Error ? e.message : 'No se pudieron calcular los totales',
+        );
+      });
+  }
+
   useEffect(() => {
-    void totalesDelDia(caja).then(setTotales);
+    cargarTotales();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caja]);
+
+  if (errorTotales) {
+    return (
+      <div className="max-w-lg mx-auto py-16 text-center space-y-4">
+        <p className="text-sm text-red-700">{errorTotales}</p>
+        <button
+          onClick={cargarTotales}
+          className="px-4 py-2 bg-neutral-900 text-white rounded text-sm"
+        >
+          Reintentar
+        </button>
+        <button
+          onClick={onVolver}
+          className="block w-full py-2 text-sm text-neutral-500 hover:text-neutral-900"
+        >
+          Volver a la caja
+        </button>
+      </div>
+    );
+  }
 
   if (!totales) {
     return <p className="py-16 text-center text-neutral-500">Calculando…</p>;
@@ -51,6 +85,8 @@ export function CierreCaja({ caja, umbralDiferencia, onCerrar, onVolver, cargand
   const requiereNota = Math.abs(diferencia) > umbralDiferencia;
   const puedeCerrar = declarado && (!requiereNota || notas.trim().length >= 5);
 
+  const efectivoSinCargar = efectivo.trim() === '';
+
   return (
     <div className="max-w-lg mx-auto py-8 space-y-6">
       <div>
@@ -60,7 +96,6 @@ export function CierreCaja({ caja, umbralDiferencia, onCerrar, onVolver, cargand
         </p>
       </div>
 
-      {/* --- Paso 1: declarar --- */}
       <div className="bg-white border border-neutral-200 rounded p-6 space-y-4">
         <div>
           <h2 className="text-sm font-medium">Contá y declará lo que tenés</h2>
@@ -92,7 +127,6 @@ export function CierreCaja({ caja, umbralDiferencia, onCerrar, onVolver, cargand
         {!declarado && (
           <button
             onClick={() => setDeclarado(true)}
-            disabled={efectivo === ''}
             className="w-full py-2.5 bg-neutral-900 text-white rounded font-medium disabled:opacity-30"
           >
             Confirmar declaración
@@ -100,7 +134,6 @@ export function CierreCaja({ caja, umbralDiferencia, onCerrar, onVolver, cargand
         )}
       </div>
 
-      {/* --- Paso 2: comparación --- */}
       {declarado && (
         <>
           <div className="bg-white border border-neutral-200 rounded p-6 space-y-3">
