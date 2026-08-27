@@ -187,11 +187,10 @@ export function enviarReciboWhatsApp(
  * corriente: cualquier cliente activo, no solo los de una ruta.
  */
 export async function sincronizarClientesSucursal(): Promise<number> {
-  const { data, error } = await supabase
+   const { data, error } = await supabase
     .from('clientes')
-    .select('id, nombre, telefono, direccion, zona, saldo, limite_credito, ultimo_pago')
+    .select('id, nombre, telefono, direccion, zona, saldo, limite_credito')
     .eq('activo', true);
-
   if (error) throw error;
 
   const clientes: ClienteLocal[] = (data ?? []).map((c: any) => ({
@@ -202,7 +201,7 @@ export async function sincronizarClientesSucursal(): Promise<number> {
     zona: c.zona,
     saldo: Number(c.saldo),
     limiteCredito: Number(c.limite_credito),
-    ultimoPago: c.ultimo_pago,
+    ultimoPago: null,
   }));
 
   await dbLocal.transaction('rw', dbLocal.clientes, async () => {
