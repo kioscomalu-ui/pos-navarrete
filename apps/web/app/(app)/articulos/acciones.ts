@@ -40,6 +40,13 @@ const esquema = z.object({
 
   esServicioComision: booleanoDeFormulario.optional(),
   comisionPorcentaje: z.coerce.number().min(0).max(100).optional(),
+
+  // Las cuatro alícuotas vigentes en Argentina. Se valida contra una
+  // lista cerrada para que un valor inventado no llegue a la base y
+  // después rompa el desglose del reporte fiscal.
+  alicuotaIva: z.coerce
+    .number()
+    .refine((v) => [0, 10.5, 21, 27].includes(v), 'Alícuota de IVA no válida'),
 });
 
 export type EstadoForm = { error?: string; campo?: string };
@@ -91,6 +98,7 @@ export async function guardarArticulo(
       stock_maximo: null,
       es_servicio_comision: true,
       comision_porcentaje: d.comisionPorcentaje,
+      alicuota_iva: d.alicuotaIva,
     };
 
     const { error } = id
@@ -153,6 +161,7 @@ export async function guardarArticulo(
     stock_maximo: d.stockMaximo || null,
     es_servicio_comision: false,
     comision_porcentaje: null,
+    alicuota_iva: d.alicuotaIva,
   };
 
   const { error } = id

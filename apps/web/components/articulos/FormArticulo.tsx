@@ -37,6 +37,7 @@ interface Articulo {
   activo: boolean;
   es_servicio_comision: boolean;
   comision_porcentaje: number | null;
+  alicuota_iva: number;
 }
 
 interface Props {
@@ -78,6 +79,9 @@ export function FormArticulo({
   const [regla, setRegla] = useState<ReglaRedondeo>(reglaDefault);
   const [unidad, setUnidad] = useState<UnidadMedida>(
     articulo?.unidad ?? 'unidad',
+  );
+  const [alicuotaIva, setAlicuotaIva] = useState(
+    Number(articulo?.alicuota_iva ?? 21),
   );
 
   const [precioManual, setPrecioManual] = useState(
@@ -172,6 +176,7 @@ export function FormArticulo({
               <input type="hidden" name="reglaRedondeo" value="sin_redondeo" />
               <input type="hidden" name="precioManual" value="false" />
               <input type="hidden" name="stockMinimo" value="0" />
+              <input type="hidden" name="alicuotaIva" value="21" />
             </>
           )}
         </section>
@@ -347,20 +352,40 @@ export function FormArticulo({
               </Campo>
             </div>
 
-            <Campo label="Redondeo">
-              <select
-                name="reglaRedondeo"
-                value={regla}
-                onChange={(e) => setRegla(e.target.value as ReglaRedondeo)}
-                className={`input ${atenuado}`}
+            <div className="grid grid-cols-2 gap-4">
+              <Campo label="Redondeo">
+                <select
+                  name="reglaRedondeo"
+                  value={regla}
+                  onChange={(e) => setRegla(e.target.value as ReglaRedondeo)}
+                  className={`input ${atenuado}`}
+                >
+                  <option value="sin_redondeo">Sin redondeo</option>
+                  <option value="al_peso">Al peso entero</option>
+                  <option value="al_cincuenta">A .00 o .50</option>
+                  <option value="a_la_decena">A la decena</option>
+                  <option value="a_la_centena">A la centena</option>
+                </select>
+              </Campo>
+
+              <Campo
+                label="IVA"
+                ayuda="La alícuota que le corresponde a este artículo"
+                error={campoError(estado, 'alicuotaIva')}
               >
-                <option value="sin_redondeo">Sin redondeo</option>
-                <option value="al_peso">Al peso entero</option>
-                <option value="al_cincuenta">A .00 o .50</option>
-                <option value="a_la_decena">A la decena</option>
-                <option value="a_la_centena">A la centena</option>
-              </select>
-            </Campo>
+                <select
+                  name="alicuotaIva"
+                  value={alicuotaIva}
+                  onChange={(e) => setAlicuotaIva(Number(e.target.value))}
+                  className="input"
+                >
+                  <option value="21">21% — general</option>
+                  <option value="10.5">10,5% — reducida</option>
+                  <option value="0">Exento / 0%</option>
+                  <option value="27">27% — servicios</option>
+                </select>
+              </Campo>
+            </div>
 
             <div className="pt-4 border-t border-tiza/40 space-y-3">
               <input
@@ -522,7 +547,7 @@ export function FormArticulo({
                       margenBajo ? 'text-ambar-dial' : 'text-tiza/60'
                     }`}
                   >
-                    margen real {margenReal.porcentaje}%
+                    margen real {margenReal.porcentaje}% · IVA {alicuotaIva}%
                   </p>
                 </div>
               </>
