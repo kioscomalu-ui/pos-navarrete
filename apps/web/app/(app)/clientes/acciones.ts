@@ -74,3 +74,45 @@ export async function alternarActivoCliente(id: string, activo: boolean) {
   revalidatePath('/clientes');
   revalidatePath(`/clientes/${id}`);
 }
+// ====================================================================
+// Ajuste de saldo
+//
+// El saldo normalmente sale de las ventas a cuenta corriente y de los
+// cobros — no es un campo de edición libre. Este ajuste existe para
+// los casos legítimos (una deuda anterior al sistema, un error de
+// carga inicial) y por eso exige un motivo y queda registrado con el
+// usuario que lo hizo.
+// ====================================================================
+
+export async function ajustarSaldoCliente(
+  clienteId: string,
+  saldoNuevo: number,
+  motivo: string,
+): Promise<EstadoForm> {
+  const sesion = await getSesion();
+  if (!['admin', 'gerente'].includes(sesion.rol)) {
+    return { error: 'No tenés permisos para ajustar saldos' };
+  }
+
+  if (!Number.isFinite(saldoNuevo) || saldoNuevo < 0) {
+    return { error: 'El saldo tiene que ser un número positivo' };
+  }
+
+  if (motivo.trim().length < 5) {
+    return { error: 'Indicá el motivo del ajuste' };
+  }
+
+  const supabase = await createClient();
+
+  const { error } = await supabase.rpc('ajustar_saldo_cliente', {
+    p_cliente_id: clienteId,
+    p_saldo_nuevo: saldoNuevo,
+    p_motivo: motivo.trim(),
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/clientes');
+  revalidatePath(`/clientes/${clienteId}`);
+  return {};
+}
