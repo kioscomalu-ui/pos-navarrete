@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { buscarEnCartera } from '@/lib/cobranza-manager';
+import { buscarEnCartera, sincronizarClientesSucursal } from '@/lib/cobranza-manager';
 import { formatearPrecio } from '@pos/shared/constants/empresa';
 import type { ClienteLocal } from '@/lib/db-local';
 
@@ -13,14 +13,31 @@ interface Props {
 
 export function SelectorCliente({ total, onElegir, onCerrar }: Props) {
   const [termino, setTermino] = useState('');
-  const [resultados, setResultados] = useState<ClienteLocal[]>([]);
+    const [resultados, setResultados] = useState<ClienteLocal[]>([]);
   const [seleccion, setSeleccion] = useState(0);
+  const [actualizando, setActualizando] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     input.current?.focus();
   }, []);
 
+  useEffect(() => {
+    setSeleccion(0);
+    void buscarEnCartera(termino).then(setResultados);
+  }, [termino]);
+
+  async function actualizarClientes() {
+    setActualizando(true);
+    try {
+      await sincronizarClientesSucursal();
+      setResultados(await buscarEnCartera(termino));
+    } finally {
+      setActualizando(false);
+    }
+  
+  }
+   
   useEffect(() => {
     setSeleccion(0);
     void buscarEnCartera(termino).then(setResultados);
@@ -66,7 +83,16 @@ export function SelectorCliente({ total, onElegir, onCerrar }: Props) {
           }}
           placeholder="Buscar cliente…"
           className="w-full px-5 py-4 text-lg outline-none border-b border-neutral-200"
-        />
+               />
+
+        <button
+          onClick={actualizarClientes}
+          disabled={actualizando}
+          className="w-full px-5 py-2 text-xs text-neutral-500 hover:text-neutral-900
+                     border-b border-neutral-200 disabled:opacity-40 text-left"
+        >
+          {actualizando ? 'Actualizando…' : '¿No aparece? Actualizar lista de clientes'}
+        </button>
 
         <ul className="max-h-72 overflow-y-auto">
           {resultados.map((c, i) => {

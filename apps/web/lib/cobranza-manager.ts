@@ -179,3 +179,36 @@ export function enviarReciboWhatsApp(
   const prefijo = numero && !numero.startsWith('54') ? `54${numero}` : numero;
   window.open(`https://wa.me/${prefijo}?text=${texto}`, '_blank');
 }
+
+/**
+ * Trae TODOS los clientes activos, sin filtrar por cobrador — a
+ * diferencia de descargarCartera(), que es específica de las rutas
+ * de cobranza. Esta es la que necesita la caja para vender a cuenta
+ * corriente: cualquier cliente activo, no solo los de una ruta.
+ */
+export async function sincronizarClientesSucursal(): Promise<number> {
+  const { data, error } = await supabase
+    .from('clientes')
+    .select('id, nombre, telefono, direccion, zona, saldo, limite_credito, ultimo_pago')
+    .eq('activo', true);
+
+  if (error) throw error;
+
+  const clientes: ClienteLocal[] = (data ?? []).map((c: any) => ({
+    id: c.id,
+    nombre: c.nombre,
+    telefono: c.telefono,
+    direccion: c.direccion,
+    zona: c.zona,
+    saldo: Number(c.saldo),
+    limiteCredito: Number(c.limite_credito),
+    ultimoPago: c.ultimo_pago,
+  }));
+
+  await dbLocal.transaction('rw', dbLocal.clientes, async () => {
+    await dbLocal.clientes.clear();
+    await dbLocal.clientes.bulkPut(clientes);
+  });
+
+  return clientes.length;
+}
