@@ -8,6 +8,7 @@ const REPORTES = [
   { href: '/reportes/articulos', label: 'Artículos' },
   { href: '/reportes/faltantes', label: 'Faltantes' },
   { href: '/reportes/arqueos', label: 'Arqueos' },
+  { href: '/reportes/fiscal', label: 'Fiscal' },
 ];
 
 export default function ReportesLayout({
@@ -21,7 +22,7 @@ export default function ReportesLayout({
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">Reportes</h1>
 
-      <nav className="flex gap-1 border-b border-neutral-200 -mb-px">
+      <nav className="flex gap-1 border-b border-neutral-200 -mb-px overflow-x-auto">
         {REPORTES.map((r) => {
           const activo = pathname === r.href || pathname.startsWith(`${r.href}/`);
 
@@ -30,7 +31,7 @@ export default function ReportesLayout({
               key={r.href}
               href={r.href}
               aria-current={activo ? 'page' : undefined}
-              className={`px-4 py-2 text-sm border-b-2 transition ${
+              className={`px-4 py-2 text-sm border-b-2 transition whitespace-nowrap ${
                 activo
                   ? 'text-neutral-900 font-medium border-neutral-900'
                   : 'text-neutral-600 border-transparent hover:text-neutral-900 hover:border-neutral-300'
