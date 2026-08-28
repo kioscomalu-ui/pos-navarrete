@@ -22,7 +22,7 @@ const SECCIONES: Seccion[] = [
   { href: '/clientes', label: 'Clientes', roles: ['admin', 'gerente', 'supervisor'] },
   { href: '/cobranzas', label: 'Cobranzas', roles: ['admin', 'gerente', 'cobrador'] },
   { href: '/reportes', label: 'Reportes', roles: ['admin', 'gerente', 'supervisor'] },
-  { href: '/admin', label: 'Administración', roles: ['admin'] },
+  { href: '/admin', label: 'Administración', roles: ['admin', 'gerente'] },
 ];
 
 interface Props {
