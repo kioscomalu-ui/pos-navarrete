@@ -243,7 +243,11 @@ export async function totalesDelDia(caja: CajaLocal): Promise<TotalesDia> {
     try {
       const movimientos = await movimientosDeCaja(caja.id);
       for (const m of movimientos) {
-        if (m.tipo === 'pago_proveedor' || m.tipo === 'transferencia_salida') {
+        if (
+          m.tipo === 'pago_proveedor' ||
+          m.tipo === 'transferencia_salida' ||
+          m.tipo === 'retiro'
+        ) {
           egresos += Number(m.monto);
         }
         if (m.tipo === 'transferencia_entrada') {

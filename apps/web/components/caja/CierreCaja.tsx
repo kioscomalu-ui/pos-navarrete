@@ -85,7 +85,16 @@ export function CierreCaja({ caja, umbralDiferencia, onCerrar, onVolver, cargand
   const requiereNota = Math.abs(diferencia) > umbralDiferencia;
   const puedeCerrar = declarado && (!requiereNota || notas.trim().length >= 5);
 
-  const efectivoSinCargar = efectivo.trim() === '';
+  // El detalle de cómo se compone el esperado: si hubo pagos a
+  // proveedor, retiros o transferencias, tienen que verse acá o la
+  // persona no entiende de dónde sale el número.
+  const detalleEfectivo =
+    `Inicial ${formatearPrecio(caja.efectivoInicial)}` +
+    ` + ventas ${formatearPrecio(totales.efectivo)}` +
+    (totales.ingresos > 0
+      ? ` + recibido ${formatearPrecio(totales.ingresos)}`
+      : '') +
+    (totales.egresos > 0 ? ` − salidas ${formatearPrecio(totales.egresos)}` : '');
 
   return (
     <div className="max-w-lg mx-auto py-8 space-y-6">
@@ -144,7 +153,7 @@ export function CierreCaja({ caja, umbralDiferencia, onCerrar, onVolver, cargand
               declarado={nEfectivo}
               esperado={totales.efectivoEsperado}
               diferencia={diferencia}
-              detalle={`Inicial ${formatearPrecio(caja.efectivoInicial)} + ventas ${formatearPrecio(totales.efectivo)}`}
+              detalle={detalleEfectivo}
             />
             <Comparacion
               etiqueta="Billetera"
@@ -164,8 +173,27 @@ export function CierreCaja({ caja, umbralDiferencia, onCerrar, onVolver, cargand
             <div className="bg-amber-50 border border-amber-200 rounded p-4 space-y-2">
               <p className="text-sm text-amber-900">
                 La diferencia supera {formatearPrecio(umbralDiferencia)}.
+              </p>
+
+              {diferencia < 0 && (
+                <div className="text-sm text-amber-900 space-y-1">
+                  <p className="font-medium">Antes de cerrar, fijate:</p>
+                  <ul className="list-disc pl-5 space-y-0.5 text-xs">
+                    <li>¿Pagaste algo con plata de la caja?</li>
+                    <li>¿Entregaste efectivo a alguien o lo guardaste?</li>
+                  </ul>
+                  <p className="text-xs">
+                    Si fue así, volvé a la caja y registralo con{' '}
+                    <strong>Retirar</strong> o <strong>Pagar proveedor</strong>.
+                    Así el arqueo cierra solo y no queda como faltante.
+                  </p>
+                </div>
+              )}
+
+              <p className="text-sm text-amber-900">
                 Explicá brevemente qué pasó.
               </p>
+
               <textarea
                 value={notas}
                 onChange={(e) => setNotas(e.target.value)}

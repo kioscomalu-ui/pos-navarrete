@@ -16,6 +16,7 @@ import { EscanerCamara } from './EscanerCamara';
 import { ModalPagoProveedor } from './ModalPagoProveedor';
 import { ModalTransferenciaCaja } from './ModalTransferenciaCaja';
 import { ModalMontoServicio } from './ModalMontoServicio';
+import { ModalRetiroCaja } from './ModalRetiroCaja';
 import { RemitoImprimible } from './RemitoImprimible';
 import { formatearPrecio } from '@pos/shared/constants/empresa';
 import type { DesglosePago } from '@/lib/venta-engine';
@@ -68,6 +69,7 @@ export function PantallaCaja(props: Props) {
   const [escaneando, setEscaneando] = useState(false);
   const [pagandoProveedor, setPagandoProveedor] = useState(false);
   const [transfiriendo, setTransfiriendo] = useState(false);
+  const [retirando, setRetirando] = useState(false);
   const [servicioSeleccionado, setServicioSeleccionado] =
     useState<ArticuloServicio | null>(null);
   const [cerrando, setCerrando] = useState(false);
@@ -144,6 +146,7 @@ export function PantallaCaja(props: Props) {
     escaneando ||
     pagandoProveedor ||
     transfiriendo ||
+    retirando ||
     !!servicioSeleccionado ||
     cerrando ||
     !!ultimaVenta;
@@ -193,6 +196,7 @@ export function PantallaCaja(props: Props) {
     (mensaje: string) => {
       setPagandoProveedor(false);
       setTransfiriendo(false);
+      setRetirando(false);
       mostrarAviso(mensaje);
     },
     [mostrarAviso],
@@ -235,6 +239,7 @@ export function PantallaCaja(props: Props) {
         escaneando ||
         pagandoProveedor ||
         transfiriendo ||
+        retirando ||
         servicioSeleccionado ||
         buscando ||
         cerrando ||
@@ -268,6 +273,7 @@ export function PantallaCaja(props: Props) {
     escaneando,
     pagandoProveedor,
     transfiriendo,
+    retirando,
     servicioSeleccionado,
     buscando,
     cerrando,
@@ -638,32 +644,37 @@ export function PantallaCaja(props: Props) {
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           <button
             onClick={() => setBuscando(true)}
             className="py-2.5 text-sm rounded-lg bg-mostrador ring-1 ring-tiza/60
-                       hover:ring-verde-claro flex items-center justify-between px-3"
+                       hover:ring-verde-claro"
           >
-            <span>Buscar</span>
-            <kbd className="text-xs text-verde-claro">F4</kbd>
+            Buscar
           </button>
 
           <button
             onClick={() => setEscaneando(true)}
             className="py-2.5 text-sm rounded-lg bg-mostrador ring-1 ring-tiza/60
-                       hover:ring-verde-claro flex items-center justify-center gap-1.5"
+                       hover:ring-verde-claro"
           >
-            <span>📷</span>
-            <span>Cámara</span>
+            Cámara
           </button>
 
           <button
             onClick={() => setVentaLibre(true)}
             className="py-2.5 text-sm rounded-lg bg-mostrador ring-1 ring-tiza/60
-                       hover:ring-verde-claro flex items-center justify-between px-3"
+                       hover:ring-verde-claro"
           >
-            <span>Libre</span>
-            <kbd className="text-xs text-verde-claro">F6</kbd>
+            Libre
+          </button>
+
+          <button
+            onClick={() => setRetirando(true)}
+            className="py-2.5 text-sm rounded-lg bg-mostrador ring-1 ring-tiza/60
+                       hover:ring-verde-claro"
+          >
+            Retirar
           </button>
         </div>
 
@@ -801,6 +812,14 @@ export function PantallaCaja(props: Props) {
           cajaId={caja.id}
           onConfirmar={() => alConfirmarMovimiento('Transferencia registrada')}
           onCancelar={() => setTransfiriendo(false)}
+        />
+      )}
+
+      {retirando && (
+        <ModalRetiroCaja
+          cajaId={caja.id}
+          onConfirmar={() => alConfirmarMovimiento('Retiro registrado')}
+          onCancelar={() => setRetirando(false)}
         />
       )}
 
