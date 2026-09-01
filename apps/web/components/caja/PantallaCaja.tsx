@@ -17,6 +17,7 @@ import { ModalPagoProveedor } from './ModalPagoProveedor';
 import { ModalTransferenciaCaja } from './ModalTransferenciaCaja';
 import { ModalMontoServicio } from './ModalMontoServicio';
 import { ModalRetiroCaja } from './ModalRetiroCaja';
+import { VentasDelDia } from './VentasDelDia';
 import { RemitoImprimible } from './RemitoImprimible';
 import { formatearPrecio } from '@pos/shared/constants/empresa';
 import type { DesglosePago } from '@/lib/venta-engine';
@@ -70,6 +71,7 @@ export function PantallaCaja(props: Props) {
   const [pagandoProveedor, setPagandoProveedor] = useState(false);
   const [transfiriendo, setTransfiriendo] = useState(false);
   const [retirando, setRetirando] = useState(false);
+  const [viendoVentas, setViendoVentas] = useState(false);
   const [servicioSeleccionado, setServicioSeleccionado] =
     useState<ArticuloServicio | null>(null);
   const [cerrando, setCerrando] = useState(false);
@@ -147,6 +149,7 @@ export function PantallaCaja(props: Props) {
     pagandoProveedor ||
     transfiriendo ||
     retirando ||
+    viendoVentas ||
     !!servicioSeleccionado ||
     cerrando ||
     !!ultimaVenta;
@@ -240,6 +243,7 @@ export function PantallaCaja(props: Props) {
         pagandoProveedor ||
         transfiriendo ||
         retirando ||
+        viendoVentas ||
         servicioSeleccionado ||
         buscando ||
         cerrando ||
@@ -274,6 +278,7 @@ export function PantallaCaja(props: Props) {
     pagandoProveedor,
     transfiriendo,
     retirando,
+    viendoVentas,
     servicioSeleccionado,
     buscando,
     cerrando,
@@ -706,6 +711,12 @@ export function PantallaCaja(props: Props) {
             Cancelar venta
           </button>
           <button
+            onClick={() => setViendoVentas(true)}
+            className="flex-1 py-2 text-xs text-verde-claro hover:text-verde-esmalte"
+          >
+            Ventas de hoy
+          </button>
+          <button
             onClick={() => setCerrando(true)}
             className="flex-1 py-2 text-xs text-verde-claro hover:text-verde-esmalte"
           >
@@ -820,6 +831,15 @@ export function PantallaCaja(props: Props) {
           cajaId={caja.id}
           onConfirmar={() => alConfirmarMovimiento('Retiro registrado')}
           onCancelar={() => setRetirando(false)}
+        />
+      )}
+
+      {viendoVentas && (
+        <VentasDelDia
+          nombreSucursal={props.nombreSucursal}
+          nombreVendedor={props.nombreVendedor}
+          onEmitirRemito={(ventaId) => engine.emitirRemito(ventaId)}
+          onCerrar={() => setViendoVentas(false)}
         />
       )}
 
