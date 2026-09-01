@@ -128,6 +128,12 @@ input[type='number'] {
 }
 
 @media print {
+  html,
+  body {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
   /* Ocultar la aplicación entera */
   body > * {
     display: none !important;
