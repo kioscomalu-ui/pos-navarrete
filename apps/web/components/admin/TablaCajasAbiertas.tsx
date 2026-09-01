@@ -13,8 +13,22 @@ export function TablaCajasAbiertas({ cajas }: { cajas: CajaAbiertaDetalle[] }) {
     );
   }
 
+  const totalEnCajones = cajas.reduce(
+    (a, c) => a + Number(c.efectivo_esperado),
+    0,
+  );
+
   return (
     <div className="space-y-3">
+      <div className="bg-verde-esmalte rounded-lg px-5 py-4 flex items-baseline justify-between">
+        <span className="text-xs uppercase tracking-[0.18em] text-tiza/70">
+          Efectivo en todos los cajones
+        </span>
+        <span className="num text-2xl font-bold text-white">
+          {formatearPrecio(totalEnCajones)}
+        </span>
+      </div>
+
       {cajas.map((c) => (
         <FilaCaja key={c.id} caja={c} />
       ))}
@@ -30,6 +44,8 @@ function FilaCaja({ caja }: { caja: CajaAbiertaDetalle }) {
 
   const dias = Number(caja.dias_abierta);
   const vieja = dias >= 1;
+  const egresos = Number(caja.egresos);
+  const ingresos = Number(caja.ingresos);
 
   return (
     <div
@@ -58,14 +74,12 @@ function FilaCaja({ caja }: { caja: CajaAbiertaDetalle }) {
           </div>
         </div>
 
-        {!confirmando && (
-          <button
-            onClick={() => setConfirmando(true)}
-            className="px-3 py-1.5 text-sm rounded ring-1 ring-tiza/60 hover:ring-verde-claro"
-          >
-            Cerrar caja
-          </button>
-        )}
+        <div className="text-right">
+          <div className="text-xs text-verde-claro">En el cajón ahora</div>
+          <div className="num text-xl font-semibold">
+            {formatearPrecio(Number(caja.efectivo_esperado))}
+          </div>
+        </div>
       </div>
 
       <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-sm">
@@ -78,9 +92,9 @@ function FilaCaja({ caja }: { caja: CajaAbiertaDetalle }) {
           <dd className="num">{formatearPrecio(Number(caja.ventas_efectivo))}</dd>
         </div>
         <div>
-          <dt className="text-xs text-verde-claro">Efectivo esperado</dt>
-          <dd className="num font-medium">
-            {formatearPrecio(Number(caja.efectivo_esperado))}
+          <dt className="text-xs text-verde-claro">Salidas</dt>
+          <dd className={`num ${egresos > 0 ? 'text-rojo-plomo' : ''}`}>
+            {egresos > 0 ? `− ${formatearPrecio(egresos)}` : '—'}
           </dd>
         </div>
         <div>
@@ -88,6 +102,21 @@ function FilaCaja({ caja }: { caja: CajaAbiertaDetalle }) {
           <dd className="num">{formatearPrecio(Number(caja.total_vendido))}</dd>
         </div>
       </dl>
+
+      {ingresos > 0 && (
+        <p className="text-xs text-verde-claro mt-2">
+          Recibió {formatearPrecio(ingresos)} de otra caja
+        </p>
+      )}
+
+      {!confirmando && (
+        <button
+          onClick={() => setConfirmando(true)}
+          className="mt-4 px-3 py-1.5 text-sm rounded ring-1 ring-tiza/60 hover:ring-verde-claro"
+        >
+          Cerrar caja
+        </button>
+      )}
 
       {confirmando && (
         <div className="mt-4 pt-4 border-t border-tiza/40 space-y-3">

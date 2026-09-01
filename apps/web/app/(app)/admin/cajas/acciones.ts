@@ -11,6 +11,8 @@ export interface CajaAbiertaDetalle {
   sucursal: string;
   efectivo_inicial: number;
   ventas_efectivo: number;
+  egresos: number;
+  ingresos: number;
   efectivo_esperado: number;
   total_vendido: number;
   dias_abierta: number;
