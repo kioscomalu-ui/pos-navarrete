@@ -39,6 +39,7 @@ interface ArticuloServicio {
   id: string;
   nombre: string;
   comisionPorcentaje: number | null;
+  comisionSobreMonto: boolean;
 }
 
 export function PantallaCaja(props: Props) {
@@ -129,6 +130,7 @@ export function PantallaCaja(props: Props) {
               id: art.id,
               nombre: art.nombre,
               comisionPorcentaje: art.comisionPorcentaje,
+              comisionSobreMonto: art.comisionSobreMonto,
             });
           }
           return;
@@ -205,21 +207,34 @@ export function PantallaCaja(props: Props) {
     [mostrarAviso],
   );
 
-  const imprimirRemito = useCallback(async () => {
+   const imprimirRemito = useCallback(async () => {
     if (!ultimaVenta) return;
     try {
       const numero = await engine.emitirRemito(ultimaVenta.id);
       setUltimaVenta({ ...ultimaVenta, remitoNumero: numero });
       setImprimiendo(true);
-      setTimeout(() => {
-        window.print();
-        setImprimiendo(false);
-      }, 100);
     } catch {
       mostrarAviso('No se pudo emitir el remito');
     }
   }, [ultimaVenta, engine, mostrarAviso]);
 
+  // Imprimir recién cuando el remito está pintado en el DOM. Con un
+  // setTimeout fijo, window.print() a veces corría antes de que React
+  // lo dibujara y la hoja salía en blanco.
+  useEffect(() => {
+    if (!imprimiendo) return;
+
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.print();
+        setImprimiendo(false);
+      });
+    });
+
+    return () => cancelAnimationFrame(id);
+  }, [imprimiendo]);
+
+  
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (ultimaVenta) {
@@ -740,6 +755,7 @@ export function PantallaCaja(props: Props) {
                     id: art.id,
                     nombre: art.nombre,
                     comisionPorcentaje: art.comisionPorcentaje,
+                    comisionSobreMonto: art.comisionSobreMonto,
                   });
                 }
               } else {

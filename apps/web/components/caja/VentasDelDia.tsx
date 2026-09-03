@@ -55,6 +55,29 @@ export function VentasDelDia({
     void cargar();
   }, [cargar]);
 
+  /**
+   * Imprimir recién cuando el remito está pintado en el DOM.
+   *
+   * Con un setTimeout fijo, window.print() a veces corría antes de
+   * que React dibujara el componente y la hoja salía en blanco. Los
+   * dos requestAnimationFrame anidados garantizan que el navegador
+   * ya repintó: el primero corre antes del repintado, el segundo
+   * después.
+   */
+  useEffect(() => {
+    if (!imprimiendo) return;
+
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.print();
+        setImprimiendo(null);
+        void cargar();
+      });
+    });
+
+    return () => cancelAnimationFrame(id);
+  }, [imprimiendo, cargar]);
+
   const filtradas = termino.trim()
     ? ventas.filter((v) => {
         const t = termino.toLowerCase();
@@ -74,12 +97,6 @@ export function VentasDelDia({
       // ahora. En los dos casos no consume un número de más.
       const numero = await onEmitirRemito(venta.id);
       setImprimiendo({ ...venta, remitoNumero: numero });
-
-      setTimeout(() => {
-        window.print();
-        setImprimiendo(null);
-        void cargar();
-      }, 120);
     } catch {
       setError('No se pudo emitir el remito. Revisá la conexión.');
     }

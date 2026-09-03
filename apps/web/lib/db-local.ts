@@ -12,6 +12,7 @@ export interface ArticuloLocal {
   activo: boolean;
   esGenerico: boolean;
   esServicioComision: boolean;
+  comisionSobreMonto: boolean;
   comisionPorcentaje: number | null;
 }
 

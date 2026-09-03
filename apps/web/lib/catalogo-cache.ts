@@ -116,9 +116,9 @@ export async function sincronizarCatalogo(
     const { data, error } = await supabase
       .from('articulos')
       .select(
-        'id, codigo_barras, codigo_interno, nombre, unidad, ' +
+                'id, codigo_barras, codigo_interno, nombre, unidad, ' +
           'costo_unitario, precio_venta_final, activo, es_generico, ' +
-          'es_servicio_comision, comision_porcentaje',
+          'es_servicio_comision, comision_porcentaje, comision_sobre_monto',
       )
       .eq('activo', true)
       .order('id')
@@ -160,6 +160,7 @@ export async function sincronizarCatalogo(
     esServicioComision: !!a.es_servicio_comision,
     comisionPorcentaje:
       a.comision_porcentaje != null ? Number(a.comision_porcentaje) : null,
+    comisionSobreMonto: !!a.comision_sobre_monto,
   }));
 
   const stockLocal = stockCrudo.map((s) => ({

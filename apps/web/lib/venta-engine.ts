@@ -144,13 +144,23 @@ export class VentaEngine {
     return item;
   }
 
-  /**
-   * Quiniela, recargas de celular, etc: el cliente dice cuánto juega
-   * o carga, el sistema calcula solo cuánto de eso es ganancia según
-   * la comisión cargada en el artículo. El resto —lo que hay que
-   * rendir a la agencia o distribuidora— queda en el costo de la
-   * línea, así los reportes de margen ya muestran la ganancia real
-   * sin ningún cálculo aparte. No descuenta stock.
+ /**
+   * Quiniela, recargas de celular, etc.
+   *
+   * Hay dos formas de calcular, según cómo cobra el rubro:
+   *
+   * - Comisión INCLUIDA (quiniela): el cliente paga los $500 que
+   *   juega. De eso, un 8% queda para el comercio y el resto se
+   *   rinde a la agencia. Se cobra 500, la ganancia es 40.
+   *
+   * - Comisión SUMADA (recargas): el cliente carga $1.000 y paga
+   *   $1.100. Los $1.000 van a la distribuidora y los $100 quedan.
+   *   Se cobra 1.100, la ganancia es 100.
+   *
+   * En los dos casos el costo de la línea es lo que hay que rendir,
+   * así los reportes de margen muestran la ganancia real.
+   *
+   * No descuenta stock: no hay "stock" de un número de lotería.
    */
   agregarServicio(articuloId: string, monto: number): ItemCarrito {
     const articulo = catalogo.obtener(articuloId);
@@ -159,14 +169,23 @@ export class VentaEngine {
       throw new Error('Este artículo no está configurado como servicio con comisión');
     }
 
-    const m = Math.max(0, monto);
-    const comision = articulo.comisionPorcentaje ?? 0;
+    const m = new Decimal(Math.max(0, monto));
+    const comision = new Decimal(articulo.comisionPorcentaje ?? 0);
 
-    const costo = new Decimal(m)
-      .times(new Decimal(100).minus(comision))
-      .div(100)
-      .toDecimalPlaces(2)
-      .toNumber();
+    // aRendir: lo que se le entrega a la agencia o distribuidora.
+    // aCobrar: lo que paga el cliente.
+    let aRendir: Decimal;
+    let aCobrar: Decimal;
+
+    if (articulo.comisionSobreMonto) {
+      // El monto es lo que se rinde; la comisión se suma al cobro
+      aRendir = m;
+      aCobrar = m.plus(m.times(comision).div(100));
+    } else {
+      // El monto es lo que se cobra; la comisión sale de adentro
+      aCobrar = m;
+      aRendir = m.minus(m.times(comision).div(100));
+    }
 
     const item: ItemCarrito = {
       lineaId: `servicio:${crypto.randomUUID()}`,
@@ -174,10 +193,10 @@ export class VentaEngine {
       nombre: articulo.nombre,
       unidad: 'unidad',
       cantidad: 1,
-      precioUnitario: m,
+      precioUnitario: aCobrar.toDecimalPlaces(2).toNumber(),
       descuentoPorcentaje: 0,
-      subtotal: m,
-      costoUnitarioSnapshot: costo,
+      subtotal: aCobrar.toDecimalPlaces(2).toNumber(),
+      costoUnitarioSnapshot: aRendir.toDecimalPlaces(2).toNumber(),
       requiereCantidad: false,
       esServicio: true,
     };
