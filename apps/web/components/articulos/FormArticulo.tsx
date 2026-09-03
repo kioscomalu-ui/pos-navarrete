@@ -37,6 +37,7 @@ interface Articulo {
   activo: boolean;
   es_servicio_comision: boolean;
   comision_porcentaje: number | null;
+  comision_sobre_monto: boolean;
   alicuota_iva: number;
 }
 
@@ -67,6 +68,9 @@ export function FormArticulo({
   );
   const [comisionPorcentaje, setComisionPorcentaje] = useState(
     Number(articulo?.comision_porcentaje ?? 15),
+  );
+  const [comisionSobreMonto, setComisionSobreMonto] = useState(
+    articulo?.comision_sobre_monto ?? false,
   );
 
   const [costo, setCosto] = useState(Number(articulo?.costo_unitario ?? 0));
@@ -165,6 +169,31 @@ export function FormArticulo({
                   className="input num text-right w-32"
                 />
               </Campo>
+
+              <input
+                type="hidden"
+                name="comisionSobreMonto"
+                value={comisionSobreMonto ? 'true' : 'false'}
+              />
+
+              <label className="flex items-start gap-2 cursor-pointer pt-1">
+                <input
+                  type="checkbox"
+                  checked={comisionSobreMonto}
+                  onChange={(e) => setComisionSobreMonto(e.target.checked)}
+                  className="accent-verde-esmalte mt-0.5"
+                />
+                <span className="text-sm">
+                  La comisión se suma al monto
+                  <span className="block text-xs text-verde-claro mt-0.5">
+                    {comisionSobreMonto
+                      ? `Recargas: el cliente carga $1.000 y paga ${formatearPrecio(
+                          1000 + 1000 * (comisionPorcentaje / 100),
+                        )}`
+                      : 'Quiniela: el cliente juega $500 y paga $500'}
+                  </span>
+                </span>
+              </label>
             </>
           )}
 
@@ -489,14 +518,31 @@ export function FormArticulo({
                 <div className="text-[0.65rem] uppercase tracking-[0.18em] text-tiza/70">
                   Servicio con comisión
                 </div>
-                <p className="text-xs text-tiza/70">
-                  El monto lo carga el vendedor en cada venta. De cada $100
-                  jugados o cargados, quedan{' '}
-                  <span className="text-white font-medium">
-                    {formatearPrecio(comisionPorcentaje)}
-                  </span>{' '}
-                  de ganancia.
-                </p>
+
+                {comisionSobreMonto ? (
+                  <p className="text-xs text-tiza/70">
+                    La comisión se suma al monto. Si el cliente carga $1.000,
+                    paga{' '}
+                    <span className="text-white font-medium">
+                      {formatearPrecio(1000 + 1000 * (comisionPorcentaje / 100))}
+                    </span>{' '}
+                    y quedan{' '}
+                    <span className="text-white font-medium">
+                      {formatearPrecio(1000 * (comisionPorcentaje / 100))}
+                    </span>{' '}
+                    de ganancia.
+                  </p>
+                ) : (
+                  <p className="text-xs text-tiza/70">
+                    La comisión está incluida en el monto. Si el cliente juega
+                    $1.000, paga $1.000 y quedan{' '}
+                    <span className="text-white font-medium">
+                      {formatearPrecio(1000 * (comisionPorcentaje / 100))}
+                    </span>{' '}
+                    de ganancia.
+                  </p>
+                )}
+
                 <div className="border-t border-white/15 pt-3 flex items-baseline justify-between">
                   <span className="text-xs text-tiza/70">Comisión</span>
                   <span className="num text-2xl font-bold text-white">

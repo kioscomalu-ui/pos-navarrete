@@ -40,7 +40,7 @@ const esquema = z.object({
 
   esServicioComision: booleanoDeFormulario.optional(),
   comisionPorcentaje: z.coerce.number().min(0).max(100).optional(),
-
+  comisionSobreMonto: booleanoDeFormulario.optional(),
   // Las cuatro alícuotas vigentes en Argentina. Se valida contra una
   // lista cerrada para que un valor inventado no llegue a la base y
   // después rompa el desglose del reporte fiscal.
@@ -98,6 +98,7 @@ export async function guardarArticulo(
       stock_maximo: null,
       es_servicio_comision: true,
       comision_porcentaje: d.comisionPorcentaje,
+      comision_sobre_monto: !!d.comisionSobreMonto,
       alicuota_iva: d.alicuotaIva,
     };
 
@@ -161,6 +162,7 @@ export async function guardarArticulo(
     stock_maximo: d.stockMaximo || null,
     es_servicio_comision: false,
     comision_porcentaje: null,
+    comision_sobre_monto: false,
     alicuota_iva: d.alicuotaIva,
   };
 
