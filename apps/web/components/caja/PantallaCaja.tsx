@@ -664,13 +664,14 @@ export function PantallaCaja(props: Props) {
           />
         </div>
 
-        <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-4 gap-2">
           <button
             onClick={() => setBuscando(true)}
             className="py-2.5 text-sm rounded-lg bg-mostrador ring-1 ring-tiza/60
-                       hover:ring-verde-claro"
+                       hover:ring-verde-claro flex items-center justify-center gap-1.5"
           >
-            Buscar
+            <span>Buscar</span>
+            <kbd className="text-xs text-verde-claro">F4</kbd>
           </button>
 
           <button
@@ -682,19 +683,20 @@ export function PantallaCaja(props: Props) {
           </button>
 
           <button
-            onClick={() => setVentaLibre(true)}
-            className="py-2.5 text-sm rounded-lg bg-mostrador ring-1 ring-tiza/60
-                       hover:ring-verde-claro"
-          >
-            Libre
-          </button>
-
-          <button
             onClick={() => setRetirando(true)}
             className="py-2.5 text-sm rounded-lg bg-mostrador ring-1 ring-tiza/60
                        hover:ring-verde-claro"
           >
             Retirar
+          </button>
+
+          <button
+            onClick={() => setVentaLibre(true)}
+            className="py-2.5 text-sm rounded-lg bg-mostrador ring-1 ring-tiza/60
+                       hover:ring-verde-claro flex items-center justify-center gap-1.5"
+          >
+            <span>Libre</span>
+            <kbd className="text-xs text-verde-claro">F6</kbd>
           </button>
         </div>
 
