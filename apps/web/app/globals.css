@@ -242,8 +242,10 @@ input[type='number'] {
     font-size: 0.82em;
   }
 
+   /* !important porque `.remito-print * { display: revert !important }`
+     pisa el flex y los dos spans quedan pegados sin separación. */
   .remito-meta > div {
-    display: flex;
+    display: flex !important;
     justify-content: space-between;
     font-size: 0.95em;
   }
@@ -253,9 +255,9 @@ input[type='number'] {
   }
 
   .remito-linea {
-    display: flex;
+    display: flex !important;
     justify-content: space-between;
-    gap: 4px;
+    font-size: 0.95em;
   }
 
   .remito-nombre {
@@ -271,8 +273,8 @@ input[type='number'] {
     font-size: 0.88em;
   }
 
-  .remito-total {
-    display: flex;
+    .remito-total {
+    display: flex !important;
     justify-content: space-between;
     font-weight: 700;
     font-size: 1.4em;

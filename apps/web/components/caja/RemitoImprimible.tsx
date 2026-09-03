@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   EMPRESA,
   REMITO,
@@ -21,7 +23,15 @@ interface Props {
 export function RemitoImprimible({ venta, sucursal, vendedor }: Props) {
   const esMixto = venta.metodoPago === 'mixto';
 
-  return (
+    // El remito se monta como hijo directo del <body>, fuera del árbol
+  // de la app. La regla `body > * { display: none }` del @media print
+  // oculta el contenedor de Next.js — y con él, cualquier cosa que
+  // esté adentro, por más que le pongamos display: block.
+  const [montado, setMontado] = useState(false);
+  useEffect(() => setMontado(true), []);
+  if (!montado) return null;
+
+  return createPortal(
     <div className="remito-print">
       {/* ---- Encabezado ---- */}
       <div className="remito-empresa">
@@ -153,7 +163,8 @@ export function RemitoImprimible({ venta, sucursal, vendedor }: Props) {
       <div className="remito-legal">{REMITO.leyendaLegal}</div>
       <div className="remito-pie">{REMITO.politicaCambios}</div>
       <div className="remito-gracias">{REMITO.despedida}</div>
-    </div>
+        </div>,
+    document.body,
   );
 }
 
