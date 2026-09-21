@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { retirarDeCaja } from '@/lib/caja-manager';
 
 interface Props {
   cajaId: string;
@@ -31,7 +31,9 @@ export function ModalRetiroCaja({ cajaId, onConfirmar, onCancelar }: Props) {
     }
 
     const motivo =
-      destino === 'Otro' ? detalle.trim() : `${destino}${detalle ? ` · ${detalle}` : ''}`;
+      destino === 'Otro'
+        ? detalle.trim()
+        : `${destino}${detalle ? ` · ${detalle}` : ''}`;
 
     if (motivo.length < 3) {
       setError('Indicá a dónde va la plata');
@@ -41,12 +43,7 @@ export function ModalRetiroCaja({ cajaId, onConfirmar, onCancelar }: Props) {
     setError('');
     setGuardando(true);
     try {
-      const { error: err } = await supabase.rpc('registrar_retiro_caja', {
-        p_caja_id: cajaId,
-        p_monto: n,
-        p_motivo: motivo,
-      });
-      if (err) throw err;
+      await retirarDeCaja(cajaId, n, motivo);
       onConfirmar();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo registrar el retiro');
