@@ -26,8 +26,7 @@ export interface DeclaracionCierre {
  *
  * toISOString() siempre convierte a UTC: en Argentina (UTC-3), una
  * caja abierta a las 21:30 del martes quedaría registrada como
- * miércoles. Para un comercio que cierra tarde, eso significa ventas
- * apareciendo en el día equivocado.
+ * miércoles.
  */
 function fechaLocalHoy(): string {
   const d = new Date();
@@ -35,6 +34,21 @@ function fechaLocalHoy(): string {
   const mes = String(d.getMonth() + 1).padStart(2, '0');
   const dia = String(d.getDate()).padStart(2, '0');
   return `${anio}-${mes}-${dia}`;
+}
+
+/**
+ * Supabase devuelve sus errores como objetos planos, no como Error de
+ * JavaScript. Los modales solo muestran el mensaje real si reciben un
+ * Error; con el objeto crudo caían al texto genérico y el motivo
+ * verdadero quedaba escondido.
+ */
+function errorLegible(error: { message?: string; code?: string }): Error {
+  if (error.code === '23503') {
+    return new Error(
+      'La caja todavía no se sincronizó con el servidor. Esperá unos segundos y probá de nuevo.',
+    );
+  }
+  return new Error(error.message || 'Error desconocido del servidor');
 }
 
 // ====================================================================
@@ -84,8 +98,8 @@ export async function abrirCaja(
 
 /**
  * La caja abierta de este vendedor — de HOY o de un día anterior que
- * quedó sin cerrar. Buscar solo por la fecha de hoy dejaba una caja
- * de ayer huérfana para siempre.
+ * quedó sin cerrar. La más vieja primero: se resuelven en el orden en
+ * que se acumularon.
  */
 export async function cajaAbierta(vendedorId: string): Promise<CajaLocal | null> {
   const abiertas = await dbLocal.cajas
@@ -96,8 +110,6 @@ export async function cajaAbierta(vendedorId: string): Promise<CajaLocal | null>
 
   if (abiertas.length === 0) return null;
 
-  // La más vieja primero: se resuelven en el orden en que se
-  // acumularon, no al revés.
   return abiertas.sort((a, b) => a.fecha.localeCompare(b.fecha))[0];
 }
 
@@ -117,7 +129,7 @@ export async function pagarProveedor(
     p_proveedor_id: proveedorId,
     p_motivo: motivo || null,
   });
-  if (error) throw error;
+  if (error) throw errorLegible(error);
 }
 
 export async function transferirACaja(
@@ -132,7 +144,20 @@ export async function transferirACaja(
     p_monto: monto,
     p_motivo: motivo || null,
   });
-  if (error) throw error;
+  if (error) throw errorLegible(error);
+}
+
+export async function retirarDeCaja(
+  cajaId: string,
+  monto: number,
+  motivo: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('registrar_retiro_caja', {
+    p_caja_id: cajaId,
+    p_monto: monto,
+    p_motivo: motivo,
+  });
+  if (error) throw errorLegible(error);
 }
 
 export interface CajaAbierta {
@@ -144,7 +169,7 @@ export interface CajaAbierta {
 
 export async function cajasAbiertas(): Promise<CajaAbierta[]> {
   const { data, error } = await supabase.rpc('cajas_abiertas');
-  if (error) throw error;
+  if (error) throw errorLegible(error);
 
   return (data ?? []).map((c: any) => ({
     id: c.id,
@@ -228,9 +253,8 @@ async function totalesVentasLocal(caja: CajaLocal): Promise<TotalesVentas> {
 
 /**
  * El servidor es la fuente de verdad: tiene las ventas de ese
- * vendedor y esa fecha, sin importar en qué dispositivo se hicieron
- * ni si el que está cerrando ahora conserva esa historia en su
- * IndexedDB. Local queda solo como respaldo si no hay conexión.
+ * vendedor y esa fecha, sin importar en qué dispositivo se hicieron.
+ * Local queda solo como respaldo si no hay conexión.
  */
 export async function totalesDelDia(caja: CajaLocal): Promise<TotalesDia> {
   const delServidor = await totalesVentasDelServidor(caja.vendedorId, caja.fecha);
