@@ -22,12 +22,14 @@ interface ArticuloCandidato {
   margenValor: number;
   precioManual: boolean;
   precioActual: number;
+  proveedorPrincipalId: string | null;
 }
 
 interface Renglon extends ArticuloCandidato {
   lineaId: string;
   unidades: string;
   costoBulto: string;
+  margen: string;
 }
 
 interface Props {
@@ -35,10 +37,30 @@ interface Props {
   reglaRedondeo: ReglaRedondeo;
 }
 
+const CAMPOS_ARTICULO =
+  'id, nombre, costo_unitario, margen_tipo, margen_valor, ' +
+  'precio_manual, precio_venta_final, proveedor_principal_id';
+
 /** "Caja x 12" → 12. Sirve para no tipear la cantidad cada vez. */
 function unidadesDePresentacion(p: string | null): string {
   const m = (p ?? '').match(/(\d+)/);
   return m ? m[1] : '1';
+}
+
+function desdeArticulo(a: any): ArticuloCandidato {
+  return {
+    id: a.id,
+    nombre: a.nombre,
+    codigoProveedor: null,
+    presentacion: null,
+    costoAnterior: null,
+    costoUnitarioActual: Number(a.costo_unitario),
+    margenTipo: a.margen_tipo,
+    margenValor: Number(a.margen_valor),
+    precioManual: !!a.precio_manual,
+    precioActual: Number(a.precio_venta_final ?? 0),
+    proveedorPrincipalId: a.proveedor_principal_id,
+  };
 }
 
 export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
@@ -67,9 +89,7 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
       const { data } = await supabase
         .from('articulos_proveedores')
         .select(
-          'articulo_id, codigo_proveedor, costo_proveedor, presentacion, ' +
-            'articulos!inner(id, nombre, costo_unitario, margen_tipo, ' +
-            'margen_valor, precio_manual, precio_venta_final, activo)',
+          `articulo_id, codigo_proveedor, costo_proveedor, presentacion, articulos!inner(${CAMPOS_ARTICULO}, activo)`,
         )
         .eq('proveedor_id', id)
         .eq('articulos.activo', true)
@@ -77,17 +97,12 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
 
       setDelProveedor(
         (data ?? []).map((r: any) => ({
+          ...desdeArticulo(r.articulos),
           id: r.articulo_id,
-          nombre: r.articulos.nombre,
           codigoProveedor: r.codigo_proveedor,
           presentacion: r.presentacion,
           costoAnterior:
             r.costo_proveedor != null ? Number(r.costo_proveedor) : null,
-          costoUnitarioActual: Number(r.articulos.costo_unitario),
-          margenTipo: r.articulos.margen_tipo,
-          margenValor: Number(r.articulos.margen_valor),
-          precioManual: !!r.articulos.precio_manual,
-          precioActual: Number(r.articulos.precio_venta_final ?? 0),
         })),
       );
     } finally {
@@ -103,11 +118,15 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
     setListo('');
   }, [proveedorId, cargarDelProveedor]);
 
+  const yaPuestos = useMemo(
+    () => new Set(renglones.map((r) => r.id)),
+    [renglones],
+  );
+
   // ---- Coincidencias entre los del proveedor ----
   const coincidencias = useMemo(() => {
     const t = termino.trim().toLowerCase();
     if (t.length < 2) return [];
-    const yaPuestos = new Set(renglones.map((r) => r.id));
 
     return delProveedor
       .filter(
@@ -117,12 +136,14 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
             (a.codigoProveedor ?? '').toLowerCase().includes(t)),
       )
       .slice(0, 12);
-  }, [termino, delProveedor, renglones]);
+  }, [termino, delProveedor, yaPuestos]);
 
-  // ---- Si no está entre los del proveedor, buscar en el catálogo ----
+  // ---- Búsqueda en todo el catálogo, siempre.
+  //      Antes solo corría si no había coincidencias del proveedor, y
+  //      eso escondía el resto del catálogo apenas una coincidía. ----
   useEffect(() => {
     const t = termino.trim();
-    if (t.length < 2 || coincidencias.length > 0) {
+    if (t.length < 2) {
       setOtros([]);
       return;
     }
@@ -131,32 +152,18 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
     const id = setTimeout(async () => {
       const { data } = await supabase
         .from('articulos')
-        .select(
-          'id, nombre, costo_unitario, margen_tipo, margen_valor, ' +
-            'precio_manual, precio_venta_final',
-        )
+        .select(CAMPOS_ARTICULO)
         .eq('activo', true)
         .ilike('nombre', `%${t}%`)
-        .limit(12);
+        .limit(15);
 
       if (cancelado) return;
 
-      const yaPuestos = new Set(renglones.map((r) => r.id));
+      const delProveedorIds = new Set(delProveedor.map((a) => a.id));
       setOtros(
         (data ?? [])
-          .filter((a: any) => !yaPuestos.has(a.id))
-          .map((a: any) => ({
-            id: a.id,
-            nombre: a.nombre,
-            codigoProveedor: null,
-            presentacion: null,
-            costoAnterior: null,
-            costoUnitarioActual: Number(a.costo_unitario),
-            margenTipo: a.margen_tipo,
-            margenValor: Number(a.margen_valor),
-            precioManual: !!a.precio_manual,
-            precioActual: Number(a.precio_venta_final ?? 0),
-          })),
+          .filter((a: any) => !yaPuestos.has(a.id) && !delProveedorIds.has(a.id))
+          .map(desdeArticulo),
       );
     }, 250);
 
@@ -164,7 +171,7 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
       cancelado = true;
       clearTimeout(id);
     };
-  }, [termino, coincidencias.length, renglones]);
+  }, [termino, delProveedor, yaPuestos]);
 
   function agregar(a: ArticuloCandidato) {
     setRenglones((rs) => [
@@ -174,6 +181,7 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
         lineaId: crypto.randomUUID(),
         unidades: unidadesDePresentacion(a.presentacion),
         costoBulto: '',
+        margen: String(a.margenValor),
       },
     ]);
     setTermino('');
@@ -181,7 +189,11 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
     setListo('');
   }
 
-  function actualizar(lineaId: string, campo: 'unidades' | 'costoBulto', valor: string) {
+  function actualizar(
+    lineaId: string,
+    campo: 'unidades' | 'costoBulto' | 'margen',
+    valor: string,
+  ) {
     setRenglones((rs) =>
       rs.map((r) => (r.lineaId === lineaId ? { ...r, [campo]: valor } : r)),
     );
@@ -197,14 +209,14 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
     const unidades = Number(r.unidades.replace(',', '.')) || 0;
     const bulto = Number(r.costoBulto.replace(',', '.')) || 0;
     const costoUnitario =
-      unidades > 0 && bulto > 0
-        ? Math.round((bulto / unidades) * 100) / 100
-        : 0;
+      unidades > 0 && bulto > 0 ? Math.round((bulto / unidades) * 100) / 100 : 0;
+
+    const margenValor = Number(r.margen.replace(',', '.')) || 0;
 
     const precio = calcularPrecio({
       costoUnitario,
       margenTipo: r.margenTipo,
-      margenValor: r.margenValor,
+      margenValor,
       reglaRedondeo,
     });
 
@@ -214,7 +226,21 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
         ? Math.round(((costoUnitario - base) / base) * 1000) / 10
         : null;
 
-    return { renglon: r, costoUnitario, precio, variacion, bulto, valido: costoUnitario > 0 };
+    // Solo el proveedor principal define el costo y el precio del
+    // artículo. Desde otro proveedor se registra su costo, nada más.
+    const esPrincipal =
+      !r.proveedorPrincipalId || r.proveedorPrincipalId === proveedorId;
+
+    return {
+      renglon: r,
+      costoUnitario,
+      margenValor,
+      precio,
+      variacion,
+      bulto,
+      esPrincipal,
+      valido: costoUnitario > 0,
+    };
   });
 
   const sumaRenglones = calculados.reduce((a, c) => a + c.bulto, 0);
@@ -233,6 +259,7 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
       const items = calculados.map((c) => ({
         articuloId: c.renglon.id,
         costoUnitario: c.costoUnitario,
+        margenValor: c.esPrincipal ? c.margenValor : null,
         precioBase: c.precio.precioBase,
         redondeo: c.precio.redondeoAplicado,
         precioFinal: c.precio.precioFinal,
@@ -258,7 +285,7 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
   }
 
   return (
-    <div className="space-y-5 max-w-5xl">
+    <div className="space-y-5 max-w-6xl">
       <section className="bg-mostrador rounded-lg ring-1 ring-tiza/60 p-5 space-y-4">
         <label className="block max-w-sm">
           <span className="block text-xs text-verde-claro mb-1">Proveedor</span>
@@ -297,7 +324,7 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
             {(coincidencias.length > 0 || otros.length > 0) && (
               <ul
                 className="absolute z-20 left-0 right-0 mt-1 bg-mostrador rounded-lg
-                           ring-1 ring-tiza/60 shadow-lg max-h-72 overflow-y-auto
+                           ring-1 ring-tiza/60 shadow-lg max-h-80 overflow-y-auto
                            divide-y divide-tiza/40"
               >
                 {coincidencias.map((a) => (
@@ -323,7 +350,7 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
 
                 {otros.length > 0 && (
                   <li className="px-4 py-1.5 bg-papel text-xs text-verde-claro">
-                    No están asociados a este proveedor todavía
+                    Todavía no están asociados a este proveedor
                   </li>
                 )}
 
@@ -351,7 +378,7 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
         <>
           <div className="bg-mostrador rounded-lg ring-1 ring-tiza/60 overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[46rem]">
+              <table className="w-full text-sm min-w-[52rem]">
                 <thead className="bg-papel text-verde-claro text-xs uppercase tracking-wide">
                   <tr>
                     <th className="text-left font-medium px-3 py-2.5">Artículo</th>
@@ -359,6 +386,7 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
                     <th className="text-right font-medium px-3 py-2.5 w-32">Costo bulto</th>
                     <th className="text-right font-medium px-3 py-2.5">Costo unit.</th>
                     <th className="text-right font-medium px-3 py-2.5">Var.</th>
+                    <th className="text-right font-medium px-3 py-2.5 w-24">Margen</th>
                     <th className="text-right font-medium px-3 py-2.5">Precio venta</th>
                     <th className="w-10" />
                   </tr>
@@ -373,10 +401,16 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
                           {formatearPrecio(
                             c.renglon.costoAnterior ?? c.renglon.costoUnitarioActual,
                           )}
-                          {c.renglon.precioManual && (
+                          {c.renglon.precioManual && c.esPrincipal && (
                             <span className="font-sans text-ambar-dial">
                               {' '}
                               · precio fijado a mano
+                            </span>
+                          )}
+                          {!c.esPrincipal && (
+                            <span className="font-sans text-ambar-dial">
+                              {' '}
+                              · no es el proveedor principal
                             </span>
                           )}
                         </div>
@@ -423,8 +457,30 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
                           : `${c.variacion > 0 ? '+' : ''}${c.variacion}%`}
                       </td>
 
+                      <td className="px-3 py-2.5">
+                        {c.esPrincipal ? (
+                          <div className="flex items-center justify-end gap-1">
+                            <input
+                              value={c.renglon.margen}
+                              onChange={(e) =>
+                                actualizar(c.renglon.lineaId, 'margen', e.target.value)
+                              }
+                              inputMode="decimal"
+                              className="input num text-right py-1.5"
+                            />
+                            <span className="text-xs text-verde-claro">
+                              {c.renglon.margenTipo === 'porcentaje' ? '%' : '$'}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="text-right text-verde-claro">—</div>
+                        )}
+                      </td>
+
                       <td className="px-3 py-2.5 text-right num">
-                        {c.renglon.precioManual ? (
+                        {!c.esPrincipal ? (
+                          <span className="text-verde-claro">solo costo</span>
+                        ) : c.renglon.precioManual ? (
                           <span className="text-verde-claro">sin cambio</span>
                         ) : c.valido ? (
                           <>
@@ -517,7 +573,7 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
 
               <p className="text-xs text-verde-claro">
                 Se actualiza el costo de este proveedor y, si es el principal
-                del artículo, también su costo y precio de venta.
+                del artículo, también su costo, margen y precio de venta.
               </p>
             </div>
           </section>
