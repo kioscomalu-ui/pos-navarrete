@@ -39,8 +39,7 @@ function fechaLocalHoy(): string {
 /**
  * Supabase devuelve sus errores como objetos planos, no como Error de
  * JavaScript. Los modales solo muestran el mensaje real si reciben un
- * Error; con el objeto crudo caían al texto genérico y el motivo
- * verdadero quedaba escondido.
+ * Error; con el objeto crudo caían al texto genérico.
  */
 function errorLegible(error: { message?: string; code?: string }): Error {
   if (error.code === '23503') {
@@ -98,8 +97,7 @@ export async function abrirCaja(
 
 /**
  * La caja abierta de este vendedor — de HOY o de un día anterior que
- * quedó sin cerrar. La más vieja primero: se resuelven en el orden en
- * que se acumularon.
+ * quedó sin cerrar. La más vieja primero.
  */
 export async function cajaAbierta(vendedorId: string): Promise<CajaLocal | null> {
   const abiertas = await dbLocal.cajas
@@ -114,7 +112,7 @@ export async function cajaAbierta(vendedorId: string): Promise<CajaLocal | null>
 }
 
 // ====================================================================
-// Movimientos: pago a proveedor y transferencias entre cajas
+// Movimientos: pago a proveedor, transferencias y retiros
 // ====================================================================
 
 export async function pagarProveedor(
@@ -191,7 +189,7 @@ async function movimientosDeCaja(
 }
 
 // ====================================================================
-// Totales del día
+// Totales de la caja
 // ====================================================================
 
 interface TotalesVentas {
@@ -203,13 +201,19 @@ interface TotalesVentas {
   ctaCte: number;
 }
 
+/**
+ * Totales de ESTA caja, no de todo el día del vendedor. Si la misma
+ * persona cerró otra caja más temprano ese día, sus ventas ya
+ * quedaron contadas ahí y no se vuelven a sumar acá.
+ *
+ * Devuelve null si la caja todavía no llegó al servidor, para usar
+ * el cálculo local como respaldo.
+ */
 async function totalesVentasDelServidor(
-  vendedorId: string,
-  fecha: string,
+  cajaId: string,
 ): Promise<TotalesVentas | null> {
-  const { data, error } = await supabase.rpc('totales_caja_dia', {
-    p_vendedor_id: vendedorId,
-    p_fecha: fecha,
+  const { data, error } = await supabase.rpc('totales_caja', {
+    p_caja_id: cajaId,
   });
 
   if (error || !data || data.length === 0) return null;
@@ -225,11 +229,18 @@ async function totalesVentasDelServidor(
   };
 }
 
+/**
+ * Respaldo sin conexión. Cuenta solo las ventas hechas desde que se
+ * abrió esta caja, no todas las del día: el dispositivo sí guarda la
+ * hora de apertura, así que puede separar una caja de otra.
+ */
 async function totalesVentasLocal(caja: CajaLocal): Promise<TotalesVentas> {
+  const desde = caja.abiertaEn ?? `${caja.fecha}T00:00:00`;
+
   const ventas = await dbLocal.ventas
     .where('fecha')
     .between(`${caja.fecha}T00:00:00`, `${caja.fecha}T23:59:59`)
-    .filter((v) => v.vendedorId === caja.vendedorId)
+    .filter((v) => v.vendedorId === caja.vendedorId && v.fecha >= desde)
     .toArray();
 
   let total = 0;
@@ -251,13 +262,8 @@ async function totalesVentasLocal(caja: CajaLocal): Promise<TotalesVentas> {
   return { cantidadVentas: ventas.length, total, efectivo, posnet, billetera, ctaCte };
 }
 
-/**
- * El servidor es la fuente de verdad: tiene las ventas de ese
- * vendedor y esa fecha, sin importar en qué dispositivo se hicieron.
- * Local queda solo como respaldo si no hay conexión.
- */
 export async function totalesDelDia(caja: CajaLocal): Promise<TotalesDia> {
-  const delServidor = await totalesVentasDelServidor(caja.vendedorId, caja.fecha);
+  const delServidor = await totalesVentasDelServidor(caja.id);
   const ventas = delServidor ?? (await totalesVentasLocal(caja));
 
   let egresos = 0;

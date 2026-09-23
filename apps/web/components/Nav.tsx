@@ -19,6 +19,7 @@ const SECCIONES: Seccion[] = [
   { href: '/caja', label: 'Caja' },
   { href: '/articulos', label: 'Artículos' },
   { href: '/proveedores', label: 'Proveedores', roles: ['admin', 'gerente'] },
+  { href: '/compras', label: 'Compras', roles: ['admin', 'gerente'] },
   { href: '/clientes', label: 'Clientes', roles: ['admin', 'gerente', 'supervisor'] },
   { href: '/cobranzas', label: 'Cobranzas', roles: ['admin', 'gerente', 'cobrador'] },
   { href: '/reportes', label: 'Reportes', roles: ['admin', 'gerente', 'supervisor'] },
@@ -81,7 +82,7 @@ export function Nav({
           className="font-black tracking-tight text-white whitespace-nowrap
                      hover:text-tiza transition-colors text-base xl:text-lg"
         >
-          NAVARRETE
+          NAVARRET 
         </Link>
 
         {/* Secciones: desde sm. A este nivel es solo texto + logo +
