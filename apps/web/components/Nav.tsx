@@ -82,7 +82,7 @@ export function Nav({
           className="font-black tracking-tight text-white whitespace-nowrap
                      hover:text-tiza transition-colors text-base xl:text-lg"
         >
-          NAVARRET 
+          ELSA 
         </Link>
 
         {/* Secciones: desde sm. A este nivel es solo texto + logo +
