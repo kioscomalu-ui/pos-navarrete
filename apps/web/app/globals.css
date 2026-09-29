@@ -195,7 +195,7 @@ input[type='number'] {
     position: absolute;
     top: 0;
     left: 0;
-    width: 58mm;
+    width: 72mm;
     padding: 2mm;
     font-family: ui-monospace, "Courier New", monospace;
     font-size: 9.5px;
@@ -206,7 +206,7 @@ input[type='number'] {
 
   @page {
     margin: 0;
-    size: 58mm auto;
+    size: 80mm auto;
   }
 
   .remito-empresa {
