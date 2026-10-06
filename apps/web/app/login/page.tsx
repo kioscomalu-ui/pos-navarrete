@@ -8,6 +8,7 @@ export default function Login() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [verPassword, setVerPassword] = useState(false);
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
 
@@ -42,16 +43,32 @@ export default function Login() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && entrar()}
+            autoComplete="username"
             className="w-full px-3 py-2 border border-neutral-300 rounded focus:outline-none focus:border-neutral-900"
           />
-          <input
-            type="password"
-            placeholder="Contraseña"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && entrar()}
-            className="w-full px-3 py-2 border border-neutral-300 rounded focus:outline-none focus:border-neutral-900"
-          />
+
+          {/* Poder leer lo escrito evita el ida y vuelta de "no me toma
+              la clave", sobre todo desde el celular */}
+          <div className="relative">
+            <input
+              type={verPassword ? 'text' : 'password'}
+              placeholder="Contraseña"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && entrar()}
+              autoComplete="current-password"
+              className="w-full px-3 py-2 pr-20 border border-neutral-300 rounded focus:outline-none focus:border-neutral-900"
+            />
+            <button
+              type="button"
+              onClick={() => setVerPassword((v) => !v)}
+              aria-label={verPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1
+                         text-xs text-neutral-500 hover:text-neutral-900"
+            >
+              {verPassword ? 'Ocultar' : 'Ver'}
+            </button>
+          </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 

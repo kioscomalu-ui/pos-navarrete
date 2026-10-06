@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { cambiarMiPassword } from '@/app/(app)/cuenta/acciones';
+import { CampoPassword } from '@/components/CampoPassword';
 
 export function FormCambiarPassword() {
   const [actual, setActual] = useState('');
@@ -40,51 +41,38 @@ export function FormCambiarPassword() {
 
   return (
     <form onSubmit={enviar} className="max-w-sm space-y-4">
-      <label className="block">
-        <span className="block text-xs text-verde-claro mb-1">
-          Contraseña actual
-        </span>
-        <input
-          type="password"
-          value={actual}
-          onChange={(e) => setActual(e.target.value)}
-          required
-          autoComplete="current-password"
-          className="input"
-        />
-      </label>
+      <CampoPassword
+        name="actual"
+        label="Contraseña actual"
+        value={actual}
+        onChange={setActual}
+        required
+        autoComplete="current-password"
+      />
 
-      <label className="block">
-        <span className="block text-xs text-verde-claro mb-1">
-          Contraseña nueva
-        </span>
-        <input
-          type="password"
-          value={nueva}
-          onChange={(e) => setNueva(e.target.value)}
-          required
-          minLength={6}
-          autoComplete="new-password"
-          className="input"
-        />
-        <span className="block text-xs text-verde-claro/70 mt-1">
-          Al menos 6 caracteres
-        </span>
-      </label>
+      <CampoPassword
+        name="nueva"
+        label="Contraseña nueva"
+        value={nueva}
+        onChange={setNueva}
+        required
+        autoComplete="new-password"
+        ayuda="Al menos 6 caracteres"
+      />
 
-      <label className="block">
-        <span className="block text-xs text-verde-claro mb-1">
-          Repetir contraseña nueva
-        </span>
-        <input
-          type="password"
-          value={confirmar}
-          onChange={(e) => setConfirmar(e.target.value)}
-          required
-          autoComplete="new-password"
-          className="input"
-        />
-      </label>
+      <CampoPassword
+        name="confirmar"
+        label="Repetir contraseña nueva"
+        value={confirmar}
+        onChange={setConfirmar}
+        required
+        autoComplete="new-password"
+        error={
+          confirmar.length > 0 && !coinciden
+            ? 'No coincide con la anterior'
+            : undefined
+        }
+      />
 
       {error && <p className="text-sm text-rojo-plomo">{error}</p>}
       {ok && (
