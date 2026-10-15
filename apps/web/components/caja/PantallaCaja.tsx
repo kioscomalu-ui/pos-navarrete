@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCaja } from '@/hooks/useCaja';
 import { useEscaner } from '@/hooks/useEscaner';
-import { reintentarTodo } from '@/lib/cola-sync';
+import { reintentarTodo, tareasConProblemas } from '@/lib/cola-sync';
 import { catalogo } from '@/lib/catalogo-cache';
 import { AperturaCaja } from './AperturaCaja';
 import { CierreCaja } from './CierreCaja';
@@ -76,6 +76,8 @@ export function PantallaCaja(props: Props) {
   const [servicioSeleccionado, setServicioSeleccionado] =
     useState<ArticuloServicio | null>(null);
   const [cerrando, setCerrando] = useState(false);
+  const [avisoCierre, setAvisoCierre] = useState(false);
+  const [trabadas, setTrabadas] = useState(0);
   const [imprimiendo, setImprimiendo] = useState(false);
   const [reintentando, setReintentando] = useState(false);
   const [ultimaVenta, setUltimaVenta] = useState<VentaLocal | null>(null);
@@ -94,7 +96,7 @@ export function PantallaCaja(props: Props) {
       const r = await reintentarTodo();
       if (r.enviadas > 0) {
         mostrarAviso(
-          `${r.enviadas} ${r.enviadas === 1 ? 'venta sincronizada' : 'ventas sincronizadas'}`,
+          `${r.enviadas} ${r.enviadas === 1 ? 'operación subida' : 'operaciones subidas'}`,
         );
       } else if (r.fallidas > 0) {
         mostrarAviso('Sigue sin poder sincronizar. Revisá la conexión.');
@@ -105,6 +107,27 @@ export function PantallaCaja(props: Props) {
       setReintentando(false);
     }
   }, [mostrarAviso]);
+
+  // Al querer cerrar la caja con operaciones sin subir, primero el
+  // aviso. Lo del 14/10 fue justamente esto: ventas que quedaron en
+  // el dispositivo y nadie se enteró hasta el arqueo del día después.
+  const intentarCerrar = useCallback(async () => {
+    if (enCola > 0) {
+      setTrabadas((await tareasConProblemas()).length);
+      setAvisoCierre(true);
+      return;
+    }
+    setCerrando(true);
+  }, [enCola]);
+
+  // Si mientras está en el aviso la cola se vacía, sigue de largo al
+  // cierre: no tiene sentido hacerle apretar otro botón.
+  useEffect(() => {
+    if (avisoCierre && enCola === 0) {
+      setAvisoCierre(false);
+      setCerrando(true);
+    }
+  }, [avisoCierre, enCola]);
 
   const alEscanear = useCallback(
     (codigo: string) => {
@@ -154,6 +177,7 @@ export function PantallaCaja(props: Props) {
     viendoVentas ||
     !!servicioSeleccionado ||
     cerrando ||
+    avisoCierre ||
     !!ultimaVenta;
 
   useEscaner(alEscanear, listo && !!caja && !hayModal);
@@ -207,7 +231,7 @@ export function PantallaCaja(props: Props) {
     [mostrarAviso],
   );
 
-   const imprimirRemito = useCallback(async () => {
+  const imprimirRemito = useCallback(async () => {
     if (!ultimaVenta) return;
     try {
       const numero = await engine.emitirRemito(ultimaVenta.id);
@@ -234,7 +258,6 @@ export function PantallaCaja(props: Props) {
     return () => cancelAnimationFrame(id);
   }, [imprimiendo]);
 
-  
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (ultimaVenta) {
@@ -262,6 +285,7 @@ export function PantallaCaja(props: Props) {
         servicioSeleccionado ||
         buscando ||
         cerrando ||
+        avisoCierre ||
         !caja
       ) {
         return;
@@ -297,6 +321,7 @@ export function PantallaCaja(props: Props) {
     servicioSeleccionado,
     buscando,
     cerrando,
+    avisoCierre,
     caja,
   ]);
 
@@ -312,6 +337,73 @@ export function PantallaCaja(props: Props) {
         onAbrir={(monto) => void abrir(monto)}
         cargando={false}
       />
+    );
+  }
+
+  if (avisoCierre) {
+    return (
+      <div className="py-10 max-w-lg mx-auto">
+        <div className="bg-mostrador rounded-xl overflow-hidden shadow-xl ring-1 ring-tiza/60">
+          <div className="h-1.5 bg-ambar-dial" />
+
+          <div className="px-8 py-8">
+            <p className="text-[0.65rem] uppercase tracking-[0.2em] text-verde-claro">
+              Falta subir al servidor
+            </p>
+
+            <p className="num text-6xl font-bold leading-none mt-3">{enCola}</p>
+
+            <p className="mt-2">
+              {enCola === 1
+                ? 'operación guardada en este dispositivo'
+                : 'operaciones guardadas en este dispositivo'}
+            </p>
+
+            <p className="text-sm text-verde-claro mt-5">
+              {online
+                ? 'Todavía no llegaron al servidor. Si cerrás la caja ahora, el arqueo va a dar bien acá pero esas ventas no van a figurar en los reportes.'
+                : 'El dispositivo está sin conexión. Las ventas están guardadas, pero no van a subir hasta que vuelva la señal.'}
+            </p>
+
+            {trabadas > 0 && (
+              <p className="text-sm text-rojo-plomo mt-3">
+                {trabadas === 1
+                  ? '1 viene fallando desde varios intentos. Avisale a Daniel antes de cerrar.'
+                  : `${trabadas} vienen fallando desde varios intentos. Avisale a Daniel antes de cerrar.`}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-2 mt-5">
+          <button
+            onClick={forzarReintento}
+            disabled={reintentando}
+            className="w-full py-4 rounded-lg bg-verde-esmalte text-white font-medium
+                       hover:bg-verde-hondo disabled:opacity-50"
+          >
+            {reintentando ? 'Subiendo…' : 'Reintentar ahora'}
+          </button>
+
+          <button
+            onClick={() => setAvisoCierre(false)}
+            className="w-full py-3 rounded-lg bg-mostrador ring-1 ring-tiza/60
+                       hover:ring-verde-claro"
+          >
+            Volver a la caja y seguir intentando
+          </button>
+
+          <button
+            onClick={() => {
+              setAvisoCierre(false);
+              setCerrando(true);
+            }}
+            className="w-full py-3 text-xs text-verde-claro hover:text-rojo-plomo"
+          >
+            Cerrar la caja igual
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -432,29 +524,44 @@ export function PantallaCaja(props: Props) {
             <span className="num">{formatearPrecio(caja.efectivoInicial)}</span>
           </span>
 
-          <span className="flex items-center gap-3">
-            {!online && (
-              <span className="flex items-center gap-1.5 text-ambar-dial font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-ambar-dial" />
-                Sin conexión
-              </span>
-            )}
-            {enCola > 0 && (
-              <span className="flex items-center gap-1.5">
-                <span className="text-verde-claro">
-                  <span className="num">{enCola}</span> por sincronizar
-                </span>
-                <button
-                  onClick={forzarReintento}
-                  disabled={reintentando}
-                  className="text-verde-claro underline hover:text-verde-esmalte disabled:opacity-50"
-                >
-                  {reintentando ? 'reintentando…' : 'reintentar'}
-                </button>
-              </span>
-            )}
-          </span>
+          {!online && (
+            <span className="flex items-center gap-1.5 text-ambar-dial font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-ambar-dial" />
+              Sin conexión
+            </span>
+          )}
         </div>
+
+        {/* Antes esto era un texto chico arriba a la derecha y pasaba
+            desapercibido. Si hay ventas sin subir hay que verlo desde
+            el otro lado del mostrador. */}
+        {enCola > 0 && (
+          <div className="bg-ambar-suave border-l-4 border-ambar-dial rounded-r px-4 py-3">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="font-medium">
+                  <span className="num">{enCola}</span>{' '}
+                  {enCola === 1
+                    ? 'operación sin subir al servidor'
+                    : 'operaciones sin subir al servidor'}
+                </p>
+                <p className="text-sm mt-0.5">
+                  {online
+                    ? 'No cierres la app hasta que esto desaparezca.'
+                    : 'Sin conexión. Suben solas cuando vuelva la señal.'}
+                </p>
+              </div>
+              <button
+                onClick={forzarReintento}
+                disabled={reintentando}
+                className="shrink-0 px-4 py-2 text-sm rounded-lg bg-mostrador
+                           ring-1 ring-ambar-dial hover:bg-papel disabled:opacity-50"
+              >
+                {reintentando ? 'Subiendo…' : 'Reintentar'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {aviso && (
           <div className="bg-ambar-suave border-l-4 border-ambar-dial rounded-r px-4 py-2.5 text-sm">
@@ -664,7 +771,7 @@ export function PantallaCaja(props: Props) {
           />
         </div>
 
-                <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           <button
             onClick={() => setBuscando(true)}
             className="py-2.5 text-sm rounded-lg bg-mostrador ring-1 ring-tiza/60
@@ -734,7 +841,7 @@ export function PantallaCaja(props: Props) {
             Ventas de hoy
           </button>
           <button
-            onClick={() => setCerrando(true)}
+            onClick={() => void intentarCerrar()}
             className="flex-1 py-2 text-xs text-verde-claro hover:text-verde-esmalte"
           >
             Cerrar caja
