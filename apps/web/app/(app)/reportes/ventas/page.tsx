@@ -13,6 +13,7 @@ interface FilaVentas {
   efectivo: number;
   posnet: number;
   billetera: number;
+  cuenta_corriente: number;
 }
 
 interface FilaRanking {
@@ -64,8 +65,9 @@ export default async function ReporteVentas({
       efectivo: acc.efectivo + Number(f.efectivo),
       posnet: acc.posnet + Number(f.posnet),
       billetera: acc.billetera + Number(f.billetera),
+      cuentaCorriente: acc.cuentaCorriente + Number(f.cuenta_corriente ?? 0),
     }),
-    { ventas: 0, total: 0, efectivo: 0, posnet: 0, billetera: 0 },
+    { ventas: 0, total: 0, efectivo: 0, posnet: 0, billetera: 0, cuentaCorriente: 0 },
   );
 
   const maximo = Math.max(...filas.map((f) => Number(f.total)), 1);
@@ -115,7 +117,7 @@ export default async function ReporteVentas({
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Tarjeta etiqueta="Facturado" valor={formatearPrecio(totales.total)} destacar />
         <Tarjeta etiqueta="Ventas" valor={String(totales.ventas)} />
         <Tarjeta
@@ -127,12 +129,16 @@ export default async function ReporteVentas({
           etiqueta="Tarjeta + billetera"
           valor={formatearPrecio(totales.posnet + totales.billetera)}
         />
+        <Tarjeta
+          etiqueta="Cuenta corriente"
+          valor={formatearPrecio(totales.cuentaCorriente)}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_20rem] gap-4">
         <div className="bg-white border border-neutral-200 rounded overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[38rem]">
+            <table className="w-full text-sm min-w-[46rem]">
               <thead className="bg-neutral-50 text-neutral-500 text-xs uppercase tracking-wide">
                 <tr>
                   <th className="text-left font-medium px-4 py-2.5">Día</th>
@@ -140,6 +146,7 @@ export default async function ReporteVentas({
                   <th className="text-right font-medium px-4 py-2.5">Efectivo</th>
                   <th className="text-right font-medium px-4 py-2.5">POSNET</th>
                   <th className="text-right font-medium px-4 py-2.5">Billetera</th>
+                  <th className="text-right font-medium px-4 py-2.5">Cta. corriente</th>
                   <th className="text-right font-medium px-4 py-2.5">Total</th>
                   <th className="w-32 px-4 py-2.5"></th>
                 </tr>
@@ -166,6 +173,9 @@ export default async function ReporteVentas({
                     <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
                       {formatearPrecio(Number(f.billetera))}
                     </td>
+                    <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
+                      {formatearPrecio(Number(f.cuenta_corriente ?? 0))}
+                    </td>
                     <td className="px-4 py-2.5 text-right font-mono font-medium">
                       {formatearPrecio(Number(f.total))}
                     </td>
@@ -180,6 +190,30 @@ export default async function ReporteVentas({
                   </tr>
                 ))}
               </tbody>
+              {filas.length > 0 && (
+                <tfoot className="bg-neutral-50 text-sm font-medium border-t border-neutral-200">
+                  <tr>
+                    <td className="px-4 py-2.5">Total</td>
+                    <td className="px-4 py-2.5 text-right font-mono">{totales.ventas}</td>
+                    <td className="px-4 py-2.5 text-right font-mono">
+                      {formatearPrecio(totales.efectivo)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono">
+                      {formatearPrecio(totales.posnet)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono">
+                      {formatearPrecio(totales.billetera)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono">
+                      {formatearPrecio(totales.cuentaCorriente)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono">
+                      {formatearPrecio(totales.total)}
+                    </td>
+                    <td className="px-4 py-2.5"></td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
 
