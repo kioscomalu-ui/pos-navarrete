@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { TarjetaPedidoStock } from './TarjetaPedidoStock';
 import type { useChat } from '@/hooks/useChat';
 import type { ContextoChat } from '@/lib/chat-manager';
+import type { MensajeLocal } from '@/lib/db-local';
 
 interface Props {
   chat: ReturnType<typeof useChat>;
@@ -12,17 +13,36 @@ interface Props {
   onCerrar: () => void;
 }
 
+/** Un pedido ya respondido (comprado / no se consigue) está resuelto */
+function estaResuelto(m: MensajeLocal): boolean {
+  if (m.tipo !== 'pedido_stock') return false;
+  const estado = (m.metadata as { estado?: string } | undefined)?.estado;
+  return estado === 'confirmado' || estado === 'rechazado';
+}
+
 export function PanelChat({ chat, ctx, abierto, onCerrar }: Props) {
   const { canales, canalActivo, mensajes, noLeidos, enviar, abrirCanal, refrescar } =
     chat;
 
   const [texto, setTexto] = useState('');
+  const [verResueltos, setVerResueltos] = useState(false);
   const finLista = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
 
+  // Los pedidos resueltos salen del listado. Si no se filtraran, el
+  // canal Compras se llenaría de tarjetas viejas y habría que
+  // buscar lo pendiente entre ellas.
+  const resueltos = mensajes.filter(estaResuelto);
+  const visibles = verResueltos ? mensajes : mensajes.filter((m) => !estaResuelto(m));
+
   useEffect(() => {
     finLista.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [mensajes.length]);
+  }, [visibles.length]);
+
+  useEffect(() => {
+    // Al cambiar de canal volvemos a ocultar lo resuelto
+    setVerResueltos(false);
+  }, [canalActivo]);
 
   useEffect(() => {
     // En celular no forzamos el foco: además de ser la causa más
@@ -94,14 +114,32 @@ export function PanelChat({ chat, ctx, abierto, onCerrar }: Props) {
           </div>
         </div>
 
+        {resueltos.length > 0 && (
+          <button
+            onClick={() => setVerResueltos((v) => !v)}
+            className="border-b border-neutral-200 px-4 py-2 text-xs text-neutral-500
+                       hover:bg-neutral-50 text-left"
+          >
+            {verResueltos
+              ? `Ocultar ${resueltos.length} ${
+                  resueltos.length === 1 ? 'pedido resuelto' : 'pedidos resueltos'
+                }`
+              : `Ver ${resueltos.length} ${
+                  resueltos.length === 1 ? 'pedido resuelto' : 'pedidos resueltos'
+                }`}
+          </button>
+        )}
+
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-          {mensajes.length === 0 && (
+          {visibles.length === 0 && (
             <p className="text-center text-sm text-neutral-400 py-12">
-              No hay mensajes todavía
+              {mensajes.length === 0
+                ? 'No hay mensajes todavía'
+                : 'Todo resuelto, nada pendiente'}
             </p>
           )}
 
-          {mensajes.map((m) => {
+          {visibles.map((m) => {
             const propio = m.autorId === ctx.usuarioId;
 
             if (m.tipo === 'pedido_stock') {

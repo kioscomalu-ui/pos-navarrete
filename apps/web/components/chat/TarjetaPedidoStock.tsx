@@ -15,6 +15,7 @@ interface Props {
 
 export function TarjetaPedidoStock({ mensaje, propio, esCompras, onResponder }: Props) {
   const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState('');
 
   const meta = (mensaje.metadata ?? {}) as {
     articuloId?: string;
@@ -32,9 +33,14 @@ export function TarjetaPedidoStock({ mensaje, propio, esCompras, onResponder }: 
 
   async function responder(estado: 'confirmado' | 'rechazado') {
     setEnviando(true);
+    setError('');
     try {
       await responderPedido(mensaje.id, estado);
       onResponder();
+    } catch (e) {
+      // Antes el error se tragaba y la tarjeta quedaba igual, sin
+      // explicar nada. Si no se guardó, hay que decirlo.
+      setError(e instanceof Error ? e.message : 'No se pudo guardar la respuesta');
     } finally {
       setEnviando(false);
     }
@@ -73,7 +79,7 @@ export function TarjetaPedidoStock({ mensaje, propio, esCompras, onResponder }: 
             disabled={enviando}
             className="flex-1 py-1.5 text-sm bg-neutral-900 text-white rounded disabled:opacity-40"
           >
-            {esCompras ? 'Comprado' : 'Tengo'}
+            {enviando ? 'Guardando…' : esCompras ? 'Comprado' : 'Tengo'}
           </button>
           <button
             onClick={() => void responder('rechazado')}
@@ -84,6 +90,8 @@ export function TarjetaPedidoStock({ mensaje, propio, esCompras, onResponder }: 
           </button>
         </div>
       )}
+
+      {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
 
       {meta.estado === 'confirmado' && (
         <p className="text-sm text-emerald-700 mt-2">

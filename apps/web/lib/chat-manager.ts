@@ -159,6 +159,14 @@ export async function pedirStock(
   );
 }
 
+// ---------------------------------------------------------------------
+// REEMPLAZAR en apps/web/lib/chat-manager.ts
+//
+// Buscar la función responderPedido (arranca cerca de la línea 162) y
+// reemplazar el bloque completo, desde "export async function
+// responderPedido(" hasta su "}" de cierre, por esto:
+// ---------------------------------------------------------------------
+
 export async function responderPedido(
   mensajeId: string,
   estado: 'confirmado' | 'rechazado',
@@ -168,6 +176,27 @@ export async function responderPedido(
     p_estado: estado,
   });
   if (error) throw error;
+
+  // Un UPDATE que RLS filtra no devuelve error: devuelve cero filas en
+  // silencio. Por eso no alcanza con que el RPC no falle — hay que
+  // confirmar contra el servidor antes de marcarlo como resuelto en la
+  // base local, o la tarjeta queda tildada acá y pendiente para todos
+  // los demás.
+  const { data: verificacion, error: errorVerificacion } = await supabase
+    .from('mensajes')
+    .select('metadata')
+    .eq('id', mensajeId)
+    .single();
+
+  if (errorVerificacion) throw errorVerificacion;
+
+  const guardado = (verificacion?.metadata as { estado?: string } | null)?.estado;
+
+  if (guardado !== estado) {
+    throw new Error(
+      'El servidor no guardó la respuesta. Avisá que hay que revisar los permisos del chat.',
+    );
+  }
 
   const local = await dbLocal.mensajes.get(mensajeId);
   if (local) {
