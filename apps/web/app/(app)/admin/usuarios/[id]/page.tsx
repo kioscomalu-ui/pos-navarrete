@@ -1,15 +1,12 @@
+// ---------------------------------------------------------------------
+// Reemplaza a: apps/web/app/(app)/admin/usuarios/[id]/page.tsx
+// ---------------------------------------------------------------------
+
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase-server';
 import { getSesion, esAdmin } from '@/lib/sesion';
+import { etiquetaRol } from '@/lib/roles';
 import { SucursalesUsuario } from '@/components/admin/SucursalesUsuario';
-
-const ETIQUETA_ROL: Record<string, string> = {
-  admin: 'Admin',
-  gerente: 'Gerente',
-  supervisor: 'Supervisor',
-  vendedor: 'Vendedor',
-  cobrador: 'Cobrador',
-};
 
 export default async function DetalleUsuarioPage({
   params,
@@ -67,7 +64,7 @@ export default async function DetalleUsuarioPage({
         <dl className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <dt className="text-xs text-verde-claro">Rol</dt>
-            <dd>{ETIQUETA_ROL[usuario.rol] ?? usuario.rol}</dd>
+            <dd>{etiquetaRol(usuario.rol)}</dd>
           </div>
           <div>
             <dt className="text-xs text-verde-claro">Estado</dt>

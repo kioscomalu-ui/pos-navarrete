@@ -7,6 +7,7 @@ import {
   cambiarSucursal,
   alternarActivo,
 } from '@/app/(app)/admin/usuarios/acciones';
+import { etiquetaRol } from '@/lib/roles';
 
 const ROLES = ['admin', 'gerente', 'supervisor', 'vendedor', 'cobrador'];
 
@@ -80,7 +81,7 @@ export function TablaUsuarios({
                   >
                     {ROLES.map((r) => (
                       <option key={r} value={r}>
-                        {r}
+                        {etiquetaRol(r)}
                       </option>
                     ))}
                   </select>

@@ -2,13 +2,16 @@
 
 import { useActionState, useState } from 'react';
 import { crearUsuario, type EstadoAlta } from '@/app/(app)/admin/usuarios/acciones';
+import { etiquetaRol } from '@/lib/roles';
 
+// El nombre visible sale de lib/roles.ts; acá queda solo la
+// descripción de qué puede hacer cada uno.
 const ROLES = [
-  { valor: 'vendedor', label: 'Vendedor', desc: 'Caja y consulta de artículos' },
-  { valor: 'cobrador', label: 'Cobrador', desc: 'Cartera y cobranzas' },
-  { valor: 'gerente', label: 'Gerente', desc: 'Todo lo de su sucursal + reportes' },
-  { valor: 'supervisor', label: 'Supervisor', desc: 'Lectura de todas las sucursales' },
-  { valor: 'admin', label: 'Administrador', desc: 'Acceso completo' },
+  { valor: 'vendedor', desc: 'Caja y consulta de artículos' },
+  { valor: 'cobrador', desc: 'Cartera y cobranzas' },
+  { valor: 'gerente', desc: 'Todo lo de su sucursal + reportes' },
+  { valor: 'supervisor', desc: 'Lectura de todas las sucursales' },
+  { valor: 'admin', desc: 'Acceso completo' },
 ];
 
 export function FormNuevoUsuario({
@@ -72,7 +75,7 @@ export function FormNuevoUsuario({
           <select name="rol" defaultValue="vendedor" className="input">
             {ROLES.map((r) => (
               <option key={r.valor} value={r.valor}>
-                {r.label} — {r.desc}
+                {etiquetaRol(r.valor)} — {r.desc}
               </option>
             ))}
           </select>
