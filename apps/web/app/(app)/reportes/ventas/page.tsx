@@ -1,3 +1,7 @@
+// ---------------------------------------------------------------------
+// Reemplaza a: apps/web/app/(app)/reportes/ventas/page.tsx
+// ---------------------------------------------------------------------
+
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase-server';
 import { getSesion } from '@/lib/sesion';
@@ -14,6 +18,8 @@ interface FilaVentas {
   posnet: number;
   billetera: number;
   cuenta_corriente: number;
+  costo: number;
+  ganancia: number;
 }
 
 interface FilaRanking {
@@ -66,9 +72,24 @@ export default async function ReporteVentas({
       posnet: acc.posnet + Number(f.posnet),
       billetera: acc.billetera + Number(f.billetera),
       cuentaCorriente: acc.cuentaCorriente + Number(f.cuenta_corriente ?? 0),
+      costo: acc.costo + Number(f.costo ?? 0),
+      ganancia: acc.ganancia + Number(f.ganancia ?? 0),
     }),
-    { ventas: 0, total: 0, efectivo: 0, posnet: 0, billetera: 0, cuentaCorriente: 0 },
+    {
+      ventas: 0,
+      total: 0,
+      efectivo: 0,
+      posnet: 0,
+      billetera: 0,
+      cuentaCorriente: 0,
+      costo: 0,
+      ganancia: 0,
+    },
   );
+
+  // Margen sobre lo vendido, no sobre el costo: es el número que
+  // responde "de cada cien pesos que entraron, cuántos quedaron".
+  const margen = totales.total ? (totales.ganancia / totales.total) * 100 : 0;
 
   const maximo = Math.max(...filas.map((f) => Number(f.total)), 1);
   const maximoRanking = Math.max(...filasRanking.map((f) => Number(f.total)), 1);
@@ -117,8 +138,15 @@ export default async function ReporteVentas({
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         <Tarjeta etiqueta="Facturado" valor={formatearPrecio(totales.total)} destacar />
+        <Tarjeta
+          etiqueta="Ganancia"
+          valor={formatearPrecio(totales.ganancia)}
+          nota={`margen ${margen.toFixed(1)}%`}
+          destacar
+        />
+        <Tarjeta etiqueta="Costo de lo vendido" valor={formatearPrecio(totales.costo)} />
         <Tarjeta etiqueta="Ventas" valor={String(totales.ventas)} />
         <Tarjeta
           etiqueta="Ticket promedio"
@@ -138,7 +166,7 @@ export default async function ReporteVentas({
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_20rem] gap-4">
         <div className="bg-white border border-neutral-200 rounded overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[46rem]">
+            <table className="w-full text-sm min-w-[54rem]">
               <thead className="bg-neutral-50 text-neutral-500 text-xs uppercase tracking-wide">
                 <tr>
                   <th className="text-left font-medium px-4 py-2.5">Día</th>
@@ -148,47 +176,59 @@ export default async function ReporteVentas({
                   <th className="text-right font-medium px-4 py-2.5">Billetera</th>
                   <th className="text-right font-medium px-4 py-2.5">Cta. corriente</th>
                   <th className="text-right font-medium px-4 py-2.5">Total</th>
-                  <th className="w-32 px-4 py-2.5"></th>
+                  <th className="text-right font-medium px-4 py-2.5">Ganancia</th>
+                  <th className="w-28 px-4 py-2.5"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
-                {filas.map((f) => (
-                  <tr key={f.dia} className="hover:bg-neutral-50">
-                    <td className="px-4 py-2.5">
-                      {new Date(f.dia + 'T12:00').toLocaleDateString('es-AR', {
-                        weekday: 'short',
-                        day: '2-digit',
-                        month: '2-digit',
-                      })}
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
-                      {f.cantidad_ventas}
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
-                      {formatearPrecio(Number(f.efectivo))}
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
-                      {formatearPrecio(Number(f.posnet))}
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
-                      {formatearPrecio(Number(f.billetera))}
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
-                      {formatearPrecio(Number(f.cuenta_corriente ?? 0))}
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-mono font-medium">
-                      {formatearPrecio(Number(f.total))}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <div className="h-1.5 bg-neutral-100 rounded overflow-hidden">
-                        <div
-                          className="h-full bg-neutral-900"
-                          style={{ width: `${(Number(f.total) / maximo) * 100}%` }}
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filas.map((f) => {
+                  const ganancia = Number(f.ganancia ?? 0);
+
+                  return (
+                    <tr key={f.dia} className="hover:bg-neutral-50">
+                      <td className="px-4 py-2.5">
+                        {new Date(f.dia + 'T12:00').toLocaleDateString('es-AR', {
+                          weekday: 'short',
+                          day: '2-digit',
+                          month: '2-digit',
+                        })}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
+                        {f.cantidad_ventas}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
+                        {formatearPrecio(Number(f.efectivo))}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
+                        {formatearPrecio(Number(f.posnet))}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
+                        {formatearPrecio(Number(f.billetera))}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
+                        {formatearPrecio(Number(f.cuenta_corriente ?? 0))}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono font-medium">
+                        {formatearPrecio(Number(f.total))}
+                      </td>
+                      <td
+                        className={`px-4 py-2.5 text-right font-mono font-medium ${
+                          ganancia < 0 ? 'text-red-600' : 'text-emerald-700'
+                        }`}
+                      >
+                        {formatearPrecio(ganancia)}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="h-1.5 bg-neutral-100 rounded overflow-hidden">
+                          <div
+                            className="h-full bg-neutral-900"
+                            style={{ width: `${(Number(f.total) / maximo) * 100}%` }}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
               {filas.length > 0 && (
                 <tfoot className="bg-neutral-50 text-sm font-medium border-t border-neutral-200">
@@ -209,6 +249,13 @@ export default async function ReporteVentas({
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono">
                       {formatearPrecio(totales.total)}
+                    </td>
+                    <td
+                      className={`px-4 py-2.5 text-right font-mono ${
+                        totales.ganancia < 0 ? 'text-red-600' : 'text-emerald-700'
+                      }`}
+                    >
+                      {formatearPrecio(totales.ganancia)}
                     </td>
                     <td className="px-4 py-2.5"></td>
                   </tr>
@@ -268,10 +315,12 @@ export default async function ReporteVentas({
 function Tarjeta({
   etiqueta,
   valor,
+  nota,
   destacar,
 }: {
   etiqueta: string;
   valor: string;
+  nota?: string;
   destacar?: boolean;
 }) {
   return (
@@ -282,6 +331,7 @@ function Tarjeta({
       >
         {valor}
       </div>
+      {nota && <div className="text-xs text-neutral-400 mt-0.5">{nota}</div>}
     </div>
   );
 }
