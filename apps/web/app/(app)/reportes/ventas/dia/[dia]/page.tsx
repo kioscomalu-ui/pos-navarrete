@@ -43,6 +43,28 @@ const ETIQUETA_PAGO: Record<string, string> = {
   mixto: 'Combinado',
 };
 
+/*
+ * Esta página se arma en el servidor, y el servidor de Vercel corre en
+ * UTC. Sin indicar la zona, una venta de las 19:24 se mostraba como
+ * 22:24. Hay que nombrarla siempre, acá no sirve la zona del navegador.
+ */
+const ZONA = 'America/Argentina/Buenos_Aires';
+
+const HORA = new Intl.DateTimeFormat('es-AR', {
+  timeZone: ZONA,
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
+const FECHA_LARGA = new Intl.DateTimeFormat('es-AR', {
+  timeZone: ZONA,
+  weekday: 'long',
+  day: '2-digit',
+  month: 'long',
+  year: 'numeric',
+});
+
 export default async function DetalleDia({
   params,
   searchParams,
@@ -77,12 +99,8 @@ export default async function DetalleDia({
 
   const margen = totales.total ? (totales.ganancia / totales.total) * 100 : 0;
 
-  const fechaLegible = new Date(dia + 'T12:00').toLocaleDateString('es-AR', {
-    weekday: 'long',
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  });
+  // Mediodía, para que ningún corrimiento de zona cambie el día
+  const fechaLegible = FECHA_LARGA.format(new Date(`${dia}T12:00:00-03:00`));
 
   return (
     <div className="space-y-5">
@@ -149,11 +167,8 @@ export default async function DetalleDia({
 
                 return (
                   <tr key={f.venta_id} className="align-top hover:bg-neutral-50">
-                    <td className="px-4 py-2.5 font-mono text-neutral-500">
-                      {new Date(f.fecha).toLocaleTimeString('es-AR', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+                    <td className="px-4 py-2.5 font-mono text-neutral-500 whitespace-nowrap">
+                      {HORA.format(new Date(f.fecha))}
                     </td>
 
                     <td className="px-4 py-2.5">

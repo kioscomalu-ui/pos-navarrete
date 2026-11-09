@@ -38,6 +38,18 @@ export class VentaEngine {
   private escuchas = new Set<Escucha>();
   private avisoStock: string | null = null;
 
+  /*
+   * Mientras una venta se está registrando, esta bandera queda en true
+   * y cualquier otra llamada a cobrar() se rechaza.
+   *
+   * Entre que se toca el botón y que la pantalla cambia hay un ida y
+   * vuelta a IndexedDB: un segundo toque en ese hueco entraba como una
+   * venta nueva. Así se registraron 26 ventas duplicadas en tres meses.
+   * Dos clientes que compran lo mismo uno detrás del otro no se ven
+   * afectados: la bandera dura lo que tarda la escritura, no segundos.
+   */
+  private cobrando = false;
+
   constructor(
     private sucursalId: string,
     private vendedorId: string,
@@ -256,6 +268,10 @@ export class VentaEngine {
     recibidoEfectivo?: number,
     cliente?: ClienteVenta,
   ): Promise<VentaLocal> {
+    if (this.cobrando) {
+      throw new Error('La venta se está registrando, esperá un momento');
+    }
+
     const items = [...this.items.values()];
     if (items.length === 0) throw new Error('No hay artículos para cobrar');
 
@@ -289,68 +305,74 @@ export class VentaEngine {
 
     const parteEfectivo = pagos.find((p) => p.metodo === 'efectivo');
 
-    const venta: VentaLocal = {
-      id: crypto.randomUUID(),
-      numeroFactura: await this.numeroFactura(),
-      fecha: new Date().toISOString(),
-      sucursalId: this.sucursalId,
-      vendedorId: this.vendedorId,
-      clienteId: cliente?.id ?? null,
-      clienteNombre: cliente?.nombre ?? null,
-      items: items.map(({ requiereCantidad, lineaId, ...resto }) => resto),
-      subtotal: subtotal.toDecimalPlaces(2).toNumber(),
-      descuentoTotal: subtotal.minus(total).toDecimalPlaces(2).toNumber(),
-      total: total.toDecimalPlaces(2).toNumber(),
-      recibido: recibidoEfectivo ?? null,
-      vuelto:
-        recibidoEfectivo != null
-          ? new Decimal(recibidoEfectivo)
-              .minus(parteEfectivo?.monto ?? 0)
+    this.cobrando = true;
+
+    try {
+      const venta: VentaLocal = {
+        id: crypto.randomUUID(),
+        numeroFactura: await this.numeroFactura(),
+        fecha: new Date().toISOString(),
+        sucursalId: this.sucursalId,
+        vendedorId: this.vendedorId,
+        clienteId: cliente?.id ?? null,
+        clienteNombre: cliente?.nombre ?? null,
+        items: items.map(({ requiereCantidad, lineaId, ...resto }) => resto),
+        subtotal: subtotal.toDecimalPlaces(2).toNumber(),
+        descuentoTotal: subtotal.minus(total).toDecimalPlaces(2).toNumber(),
+        total: total.toDecimalPlaces(2).toNumber(),
+        recibido: recibidoEfectivo ?? null,
+        vuelto:
+          recibidoEfectivo != null
+            ? new Decimal(recibidoEfectivo)
+                .minus(parteEfectivo?.monto ?? 0)
+                .toDecimalPlaces(2)
+                .toNumber()
+            : null,
+        metodoPago,
+        pagos,
+        remitoNumero: null,
+        syncedAt: null,
+      };
+
+      await dbLocal.ventas.put(venta);
+
+      for (const item of items) {
+        if (item.esGenerico || item.esServicio) continue;
+
+        catalogo.descontar(item.articuloId, item.cantidad);
+
+        const actual = await dbLocal.stock.get(item.articuloId);
+        if (actual) {
+          await dbLocal.stock.put({
+            articuloId: item.articuloId,
+            cantidad: actual.cantidad - item.cantidad,
+          });
+        }
+      }
+
+      const parteCtaCte = pagos.find((p) => p.metodo === 'cuenta_corriente');
+      if (parteCtaCte && cliente) {
+        const local = await dbLocal.clientes.get(cliente.id);
+        if (local) {
+          await dbLocal.clientes.update(cliente.id, {
+            saldo: new Decimal(local.saldo)
+              .plus(parteCtaCte.monto)
               .toDecimalPlaces(2)
-              .toNumber()
-          : null,
-      metodoPago,
-      pagos,
-      remitoNumero: null,
-      syncedAt: null,
-    };
-
-    await dbLocal.ventas.put(venta);
-
-    for (const item of items) {
-      if (item.esGenerico || item.esServicio) continue;
-
-      catalogo.descontar(item.articuloId, item.cantidad);
-
-      const actual = await dbLocal.stock.get(item.articuloId);
-      if (actual) {
-        await dbLocal.stock.put({
-          articuloId: item.articuloId,
-          cantidad: actual.cantidad - item.cantidad,
-        });
+              .toNumber(),
+          });
+        }
       }
+
+      await encolar('venta', venta);
+
+      this.items.clear();
+      this.avisoStock = null;
+      this.emitir();
+
+      return venta;
+    } finally {
+      this.cobrando = false;
     }
-
-    const parteCtaCte = pagos.find((p) => p.metodo === 'cuenta_corriente');
-    if (parteCtaCte && cliente) {
-      const local = await dbLocal.clientes.get(cliente.id);
-      if (local) {
-        await dbLocal.clientes.update(cliente.id, {
-          saldo: new Decimal(local.saldo)
-            .plus(parteCtaCte.monto)
-            .toDecimalPlaces(2)
-            .toNumber(),
-        });
-      }
-    }
-
-    await encolar('venta', venta);
-
-    this.items.clear();
-    this.avisoStock = null;
-    this.emitir();
-
-    return venta;
   }
 
   async emitirRemito(ventaId: string): Promise<string> {
@@ -369,7 +391,20 @@ export class VentaEngine {
   }
 
   private async numeroFactura(): Promise<string> {
-    const hoy = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    /*
+     * La fecha del comprobante es la del local, no la UTC.
+     *
+     * toISOString() devuelve UTC, y con las tres horas de diferencia
+     * todo lo que se vendía después de las 21:00 quedaba numerado con
+     * la fecha del día siguiente: una venta del 27/10 a las 20:59
+     * salió como SUC01B-20261028-000001.
+     */
+    const d = new Date();
+    const hoy =
+      `${d.getFullYear()}` +
+      `${String(d.getMonth() + 1).padStart(2, '0')}` +
+      `${String(d.getDate()).padStart(2, '0')}`;
+
     const n = await siguienteNumero(`factura:${this.codigoSucursal}:${hoy}`);
     return `${this.codigoSucursal}-${hoy}-${String(n).padStart(6, '0')}`;
   }
