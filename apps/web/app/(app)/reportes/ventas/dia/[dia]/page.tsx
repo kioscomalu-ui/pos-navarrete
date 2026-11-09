@@ -1,13 +1,21 @@
 // ---------------------------------------------------------------------
-// ARCHIVO NUEVO
-// Guardar en: apps/web/app/(app)/reportes/ventas/dia/[dia]/page.tsx
-// (hay que crear las carpetas "dia" y "[dia]")
+// Reemplaza a: apps/web/app/(app)/reportes/ventas/dia/[dia]/page.tsx
 // ---------------------------------------------------------------------
 
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase-server';
 import { getSesion } from '@/lib/sesion';
 import { formatearPrecio } from '@pos/shared/constants/empresa';
+
+interface LineaArticulo {
+  nombre: string;
+  cantidad: number;
+  unidad: string;
+  precio: number;
+  subtotal: number;
+  costo: number;
+  ganancia: number;
+}
 
 interface FilaDetalle {
   venta_id: string;
@@ -24,6 +32,7 @@ interface FilaDetalle {
   total: number;
   costo: number;
   ganancia: number;
+  articulos: LineaArticulo[];
 }
 
 const ETIQUETA_PAGO: Record<string, string> = {
@@ -118,7 +127,7 @@ export default async function DetalleDia({
               <tr>
                 <th className="text-left font-medium px-4 py-2.5">Hora</th>
                 <th className="text-left font-medium px-4 py-2.5">Comprobante</th>
-                <th className="text-left font-medium px-4 py-2.5">Vendedor</th>
+                <th className="text-left font-medium px-4 py-2.5">Operador</th>
                 <th className="text-left font-medium px-4 py-2.5">Cobro</th>
                 <th className="text-right font-medium px-4 py-2.5">Total</th>
                 {verGanancia && (
@@ -136,9 +145,10 @@ export default async function DetalleDia({
                 const total = Number(f.total);
                 const ganancia = Number(f.ganancia);
                 const margenFila = total ? (ganancia / total) * 100 : 0;
+                const articulos = f.articulos ?? [];
 
                 return (
-                  <tr key={f.venta_id} className="hover:bg-neutral-50">
+                  <tr key={f.venta_id} className="align-top hover:bg-neutral-50">
                     <td className="px-4 py-2.5 font-mono text-neutral-500">
                       {new Date(f.fecha).toLocaleTimeString('es-AR', {
                         hour: '2-digit',
@@ -152,6 +162,74 @@ export default async function DetalleDia({
                         <div className="text-xs text-neutral-400 mt-0.5 truncate max-w-[12rem]">
                           {f.cliente}
                         </div>
+                      )}
+
+                      {/* El detalle de lo facturado, desplegable. Sin
+                          JavaScript: <details> lo hace el navegador. */}
+                      {articulos.length > 0 && (
+                        <details className="mt-1 group">
+                          <summary className="text-xs text-neutral-500 cursor-pointer hover:text-neutral-900 list-none">
+                            <span className="group-open:hidden">▸ </span>
+                            <span className="hidden group-open:inline">▾ </span>
+                            {articulos.length}
+                            {articulos.length === 1 ? ' artículo' : ' artículos'}
+                          </summary>
+
+                          <table className="mt-2 w-full text-xs border border-neutral-200 rounded">
+                            <thead className="bg-neutral-50 text-neutral-400">
+                              <tr>
+                                <th className="text-left font-normal px-2 py-1">
+                                  Artículo
+                                </th>
+                                <th className="text-right font-normal px-2 py-1">
+                                  Cant.
+                                </th>
+                                <th className="text-right font-normal px-2 py-1">
+                                  Precio
+                                </th>
+                                <th className="text-right font-normal px-2 py-1">
+                                  Subtotal
+                                </th>
+                                {verGanancia && (
+                                  <th className="text-right font-normal px-2 py-1">
+                                    Ganancia
+                                  </th>
+                                )}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-neutral-100">
+                              {articulos.map((a, i) => {
+                                const gananciaLinea = Number(a.ganancia);
+
+                                return (
+                                  <tr key={`${f.venta_id}-${i}`}>
+                                    <td className="px-2 py-1">{a.nombre}</td>
+                                    <td className="px-2 py-1 text-right font-mono whitespace-nowrap">
+                                      {cantidadLegible(a)}
+                                    </td>
+                                    <td className="px-2 py-1 text-right font-mono">
+                                      {formatearPrecio(Number(a.precio))}
+                                    </td>
+                                    <td className="px-2 py-1 text-right font-mono">
+                                      {formatearPrecio(Number(a.subtotal))}
+                                    </td>
+                                    {verGanancia && (
+                                      <td
+                                        className={`px-2 py-1 text-right font-mono ${
+                                          gananciaLinea < 0
+                                            ? 'text-red-600'
+                                            : 'text-emerald-700'
+                                        }`}
+                                      >
+                                        {formatearPrecio(gananciaLinea)}
+                                      </td>
+                                    )}
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </details>
                       )}
                     </td>
 
@@ -243,8 +321,20 @@ export default async function DetalleDia({
           </p>
         )}
       </div>
+
+      <p className="text-xs text-neutral-400">
+        Tocá &ldquo;artículos&rdquo; en cualquier fila para ver el detalle de lo
+        facturado en esa venta.
+      </p>
     </div>
   );
+}
+
+/** Un kilo y medio se muestra 1,500 kg; tres unidades, 3 */
+function cantidadLegible(a: LineaArticulo): string {
+  const c = Number(a.cantidad);
+  if (a.unidad === 'unidad') return String(c);
+  return `${c.toFixed(3)} ${a.unidad}`;
 }
 
 /** Para las ventas combinadas: qué parte se cobró con cada cosa */
