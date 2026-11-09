@@ -1,5 +1,8 @@
 // ---------------------------------------------------------------------
 // Reemplaza a: apps/web/app/(app)/reportes/ventas/page.tsx
+//
+// El costo y la ganancia solo los ve el admin. Un gerente o un
+// supervisor ven el reporte igual que antes, sin esas columnas.
 // ---------------------------------------------------------------------
 
 import Link from 'next/link';
@@ -46,6 +49,9 @@ export default async function ReporteVentas({
 
   const sucursalFiltro = sesion.rol === 'admin' ? null : sesion.sucursalId;
   const vendedorSeleccionado = sp.vendedor ?? '';
+
+  // La ganancia deja ver el costo de cada cosa. Solo el admin.
+  const verGanancia = sesion.rol === 'admin';
 
   const [{ data, error }, { data: ranking }] = await Promise.all([
     supabase.rpc('reporte_ventas_periodo', {
@@ -94,6 +100,15 @@ export default async function ReporteVentas({
   const maximo = Math.max(...filas.map((f) => Number(f.total)), 1);
   const maximoRanking = Math.max(...filasRanking.map((f) => Number(f.total)), 1);
 
+  function urlDia(dia: string): string {
+    const params = new URLSearchParams();
+    if (vendedorSeleccionado) params.set('vendedor', vendedorSeleccionado);
+    const qs = params.toString();
+    return qs
+      ? `/reportes/ventas/dia/${dia}?${qs}`
+      : `/reportes/ventas/dia/${dia}`;
+  }
+
   function urlConVendedor(id: string): string {
     const params = new URLSearchParams();
     if (sp.rango) params.set('rango', sp.rango);
@@ -140,13 +155,22 @@ export default async function ReporteVentas({
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         <Tarjeta etiqueta="Facturado" valor={formatearPrecio(totales.total)} destacar />
-        <Tarjeta
-          etiqueta="Ganancia"
-          valor={formatearPrecio(totales.ganancia)}
-          nota={`margen ${margen.toFixed(1)}%`}
-          destacar
-        />
-        <Tarjeta etiqueta="Costo de lo vendido" valor={formatearPrecio(totales.costo)} />
+
+        {verGanancia && (
+          <>
+            <Tarjeta
+              etiqueta="Ganancia"
+              valor={formatearPrecio(totales.ganancia)}
+              nota={`margen ${margen.toFixed(1)}%`}
+              destacar
+            />
+            <Tarjeta
+              etiqueta="Costo de lo vendido"
+              valor={formatearPrecio(totales.costo)}
+            />
+          </>
+        )}
+
         <Tarjeta etiqueta="Ventas" valor={String(totales.ventas)} />
         <Tarjeta
           etiqueta="Ticket promedio"
@@ -166,7 +190,11 @@ export default async function ReporteVentas({
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_20rem] gap-4">
         <div className="bg-white border border-neutral-200 rounded overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[54rem]">
+            <table
+              className={`w-full text-sm ${
+                verGanancia ? 'min-w-[54rem]' : 'min-w-[46rem]'
+              }`}
+            >
               <thead className="bg-neutral-50 text-neutral-500 text-xs uppercase tracking-wide">
                 <tr>
                   <th className="text-left font-medium px-4 py-2.5">Día</th>
@@ -176,7 +204,9 @@ export default async function ReporteVentas({
                   <th className="text-right font-medium px-4 py-2.5">Billetera</th>
                   <th className="text-right font-medium px-4 py-2.5">Cta. corriente</th>
                   <th className="text-right font-medium px-4 py-2.5">Total</th>
-                  <th className="text-right font-medium px-4 py-2.5">Ganancia</th>
+                  {verGanancia && (
+                    <th className="text-right font-medium px-4 py-2.5">Ganancia</th>
+                  )}
                   <th className="w-28 px-4 py-2.5"></th>
                 </tr>
               </thead>
@@ -187,11 +217,16 @@ export default async function ReporteVentas({
                   return (
                     <tr key={f.dia} className="hover:bg-neutral-50">
                       <td className="px-4 py-2.5">
-                        {new Date(f.dia + 'T12:00').toLocaleDateString('es-AR', {
-                          weekday: 'short',
-                          day: '2-digit',
-                          month: '2-digit',
-                        })}
+                        <Link
+                          href={urlDia(f.dia)}
+                          className="hover:underline underline-offset-2"
+                        >
+                          {new Date(f.dia + 'T12:00').toLocaleDateString('es-AR', {
+                            weekday: 'short',
+                            day: '2-digit',
+                            month: '2-digit',
+                          })}
+                        </Link>
                       </td>
                       <td className="px-4 py-2.5 text-right font-mono text-neutral-500">
                         {f.cantidad_ventas}
@@ -211,13 +246,15 @@ export default async function ReporteVentas({
                       <td className="px-4 py-2.5 text-right font-mono font-medium">
                         {formatearPrecio(Number(f.total))}
                       </td>
-                      <td
-                        className={`px-4 py-2.5 text-right font-mono font-medium ${
-                          ganancia < 0 ? 'text-red-600' : 'text-emerald-700'
-                        }`}
-                      >
-                        {formatearPrecio(ganancia)}
-                      </td>
+                      {verGanancia && (
+                        <td
+                          className={`px-4 py-2.5 text-right font-mono font-medium ${
+                            ganancia < 0 ? 'text-red-600' : 'text-emerald-700'
+                          }`}
+                        >
+                          {formatearPrecio(ganancia)}
+                        </td>
+                      )}
                       <td className="px-4 py-2.5">
                         <div className="h-1.5 bg-neutral-100 rounded overflow-hidden">
                           <div
@@ -250,13 +287,15 @@ export default async function ReporteVentas({
                     <td className="px-4 py-2.5 text-right font-mono">
                       {formatearPrecio(totales.total)}
                     </td>
-                    <td
-                      className={`px-4 py-2.5 text-right font-mono ${
-                        totales.ganancia < 0 ? 'text-red-600' : 'text-emerald-700'
-                      }`}
-                    >
-                      {formatearPrecio(totales.ganancia)}
-                    </td>
+                    {verGanancia && (
+                      <td
+                        className={`px-4 py-2.5 text-right font-mono ${
+                          totales.ganancia < 0 ? 'text-red-600' : 'text-emerald-700'
+                        }`}
+                      >
+                        {formatearPrecio(totales.ganancia)}
+                      </td>
+                    )}
                     <td className="px-4 py-2.5"></td>
                   </tr>
                 </tfoot>
