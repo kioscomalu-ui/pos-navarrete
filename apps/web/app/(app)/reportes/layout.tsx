@@ -1,3 +1,7 @@
+// ---------------------------------------------------------------------
+// Reemplaza a: apps/web/app/(app)/reportes/layout.tsx
+// ---------------------------------------------------------------------
+
 'use client';
 
 import Link from 'next/link';
@@ -5,6 +9,7 @@ import { usePathname } from 'next/navigation';
 
 const REPORTES = [
   { href: '/reportes/ventas', label: 'Ventas' },
+  { href: '/reportes/operadores', label: 'Por operador' },
   { href: '/reportes/articulos', label: 'Artículos' },
   { href: '/reportes/faltantes', label: 'Faltantes' },
   { href: '/reportes/arqueos', label: 'Arqueos' },
