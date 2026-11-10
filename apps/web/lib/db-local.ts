@@ -187,6 +187,37 @@ class DBLocal extends Dexie {
 
 export const dbLocal = new DBLocal();
 
+/**
+ * Código corto y estable de este dispositivo, en cuatro dígitos hex.
+ *
+ * Los contadores de factura y remito viven en la base local de cada
+ * equipo, así que dos dispositivos en la misma sucursal producían el
+ * mismo número: 792 números de factura repetidos, 1.593 ventas, entre
+ * agosto y noviembre de 2026. Este código los separa.
+ *
+ * Se guarda en la tabla de numeradores, que es numérica, y se muestra
+ * en hexadecimal. Sobrevive a cerrar la app y a quedarse sin señal; si
+ * alguna vez se borrara, el equipo tomaría otro código y seguiría sin
+ * chocar con los demás.
+ */
+export async function codigoDispositivo(): Promise<string> {
+  return dbLocal.transaction('rw', dbLocal.numeradores, async () => {
+    const guardado = await dbLocal.numeradores.get('dispositivo');
+    if (guardado) return enHex(guardado.valor);
+
+    const buf = new Uint16Array(1);
+    crypto.getRandomValues(buf);
+    const valor = buf[0];
+
+    await dbLocal.numeradores.put({ clave: 'dispositivo', valor });
+    return enHex(valor);
+  });
+}
+
+function enHex(valor: number): string {
+  return valor.toString(16).toUpperCase().padStart(4, '0');
+}
+
 export async function siguienteNumero(clave: string): Promise<number> {
   return dbLocal.transaction('rw', dbLocal.numeradores, async () => {
     const actual = await dbLocal.numeradores.get(clave);

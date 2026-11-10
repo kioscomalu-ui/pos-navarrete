@@ -123,11 +123,21 @@ export interface Rendicion {
 
 /** Calcula la rendición del día desde los recibos locales */
 export async function rendicionDelDia(cobradorId: string): Promise<Rendicion> {
-  const hoy = new Date().toISOString().slice(0, 10);
+  /*
+   * Los recibos se guardan con toISOString(), que es UTC. Tomando de
+   * ahí la fecha del día, la rendición cubría de 21:00 a 21:00 en vez
+   * del día del local. Se calcula la medianoche local y se la pasa a
+   * UTC para comparar.
+   */
+  const desde = new Date();
+  desde.setHours(0, 0, 0, 0);
+
+  const hasta = new Date();
+  hasta.setHours(23, 59, 59, 999);
 
   const recibos = await dbLocal.recibos
     .where('fecha')
-    .between(`${hoy}T00:00:00`, `${hoy}T23:59:59`, true, true)
+    .between(desde.toISOString(), hasta.toISOString(), true, true)
     .filter((r) => r.cobradorId === cobradorId)
     .toArray();
 

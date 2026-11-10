@@ -36,15 +36,24 @@ export function VentasDelDia({
     // Las ventas viven en la base local del dispositivo, así que
     // esta pantalla muestra lo que se vendió DESDE ACÁ. Una venta
     // hecha en otra máquina no aparece.
-    const hoy = new Date();
-    const anio = hoy.getFullYear();
-    const mes = String(hoy.getMonth() + 1).padStart(2, '0');
-    const dia = String(hoy.getDate()).padStart(2, '0');
-    const fecha = `${anio}-${mes}-${dia}`;
+    /*
+     * Las ventas se guardan con toISOString(), que es UTC, pero el día
+     * que le importa al vendedor es el del local. Armando la ventana
+     * con la fecha local a secas, una venta de las 21:10 queda grabada
+     * con la fecha de mañana en UTC y desaparece de esta pantalla —
+     * justo a la hora en que se cierra la caja.
+     *
+     * Por eso se calcula la medianoche local y se la pasa a UTC.
+     */
+    const desde = new Date();
+    desde.setHours(0, 0, 0, 0);
+
+    const hasta = new Date();
+    hasta.setHours(23, 59, 59, 999);
 
     const todas = await dbLocal.ventas
       .where('fecha')
-      .between(`${fecha}T00:00:00`, `${fecha}T23:59:59`, true, true)
+      .between(desde.toISOString(), hasta.toISOString(), true, true)
       .toArray();
 
     setVentas(todas.sort((a, b) => b.fecha.localeCompare(a.fecha)));

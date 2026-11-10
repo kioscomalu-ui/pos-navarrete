@@ -3,6 +3,7 @@ import { catalogo } from './catalogo-cache';
 import {
   dbLocal,
   siguienteNumero,
+  codigoDispositivo,
   type ItemVentaLocal,
   type VentaLocal,
 } from './db-local';
@@ -380,9 +381,15 @@ export class VentaEngine {
     if (!venta) throw new Error('Venta no encontrada');
     if (venta.remitoNumero) return venta.remitoNumero;
 
+    // El contador del remito también es local a cada dispositivo, así
+    // que lleva el mismo código que la factura. El remito es interno,
+    // no se declara ante ARCA, por eso no hace falta que sea
+    // correlativo por punto de venta.
+    const equipo = await codigoDispositivo();
     const n = await siguienteNumero(`remito:${this.puntoVenta}`);
     const numero =
-      `${String(this.puntoVenta).padStart(4, '0')}-${String(n).padStart(8, '0')}`;
+      `${String(this.puntoVenta).padStart(4, '0')}-${equipo}-` +
+      `${String(n).padStart(8, '0')}`;
 
     await dbLocal.ventas.update(ventaId, { remitoNumero: numero });
     await encolar('venta', { ...venta, remitoNumero: numero });
@@ -398,6 +405,10 @@ export class VentaEngine {
      * todo lo que se vendía después de las 21:00 quedaba numerado con
      * la fecha del día siguiente: una venta del 27/10 a las 20:59
      * salió como SUC01B-20261028-000001.
+     *
+     * El código del equipo evita que dos dispositivos de la misma
+     * sucursal generen el mismo número: cada uno lleva su contador en
+     * su propia base local y los dos empiezan en 1.
      */
     const d = new Date();
     const hoy =
@@ -405,8 +416,13 @@ export class VentaEngine {
       `${String(d.getMonth() + 1).padStart(2, '0')}` +
       `${String(d.getDate()).padStart(2, '0')}`;
 
+    const equipo = await codigoDispositivo();
     const n = await siguienteNumero(`factura:${this.codigoSucursal}:${hoy}`);
-    return `${this.codigoSucursal}-${hoy}-${String(n).padStart(6, '0')}`;
+
+    return (
+      `${this.codigoSucursal}-${hoy}-${equipo}-` +
+      `${String(n).padStart(6, '0')}`
+    );
   }
 
   private subtotalDe(item: ItemCarrito): number {
