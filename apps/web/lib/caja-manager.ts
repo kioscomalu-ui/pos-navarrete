@@ -96,19 +96,86 @@ export async function abrirCaja(
 }
 
 /**
- * La caja abierta de este vendedor — de HOY o de un día anterior que
- * quedó sin cerrar. La más vieja primero.
+ * La caja abierta de HOY, y solo la de hoy.
+ *
+ * Antes devolvía la más vieja sin mirar la fecha, para que una caja
+ * olvidada se pudiera cerrar al entrar. El efecto terminó siendo el
+ * contrario: en el Kiosco quedó una caja del 14/10 marcada como
+ * abierta en la base local del dispositivo —en el servidor figuraba
+ * cerrada— y durante 17 días la app la adoptó como la caja del día.
+ * Nunca pidió el fondo inicial, nunca creó una caja nueva, y
+ * $3.856.900 en ventas quedaron sin arqueo.
+ *
+ * Las que quedaron sin cerrar se listan aparte con cajasSinCerrar() y
+ * se muestran como un aviso, en vez de adoptarse en silencio.
  */
 export async function cajaAbierta(vendedorId: string): Promise<CajaLocal | null> {
+  const hoy = fechaLocalHoy();
+
+  const deHoy = await dbLocal.cajas
+    .where('[vendedorId+fecha]')
+    .equals([vendedorId, hoy])
+    .first();
+
+  return deHoy && deHoy.estado === 'abierta' ? deHoy : null;
+}
+
+/** Cajas de días anteriores que quedaron abiertas. La más vieja primero. */
+export async function cajasSinCerrar(vendedorId: string): Promise<CajaLocal[]> {
+  const hoy = fechaLocalHoy();
+
+  const abiertas = await dbLocal.cajas
+    .where('vendedorId')
+    .equals(vendedorId)
+    .filter((c) => c.estado === 'abierta' && c.fecha < hoy)
+    .toArray();
+
+  return abiertas.sort((a, b) => a.fecha.localeCompare(b.fecha));
+}
+
+/**
+ * Pone al día las cajas locales con lo que dice el servidor.
+ *
+ * Una caja cerrada desde otro dispositivo, o por un admin desde el
+ * panel, seguía figurando abierta en este equipo para siempre: no
+ * había nada que leyera ese estado de vuelta. Eso es lo que dejó la
+ * caja fantasma del 14/10 dando vueltas casi un mes.
+ *
+ * Devuelve cuántas corrigió. Sin conexión no hace nada.
+ */
+export async function reconciliarCajasLocales(
+  vendedorId: string,
+): Promise<number> {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return 0;
+
   const abiertas = await dbLocal.cajas
     .where('vendedorId')
     .equals(vendedorId)
     .filter((c) => c.estado === 'abierta')
     .toArray();
 
-  if (abiertas.length === 0) return null;
+  if (abiertas.length === 0) return 0;
 
-  return abiertas.sort((a, b) => a.fecha.localeCompare(b.fecha))[0];
+  const { data, error } = await supabase
+    .from('cajas_vendedor')
+    .select('id, estado')
+    .in(
+      'id',
+      abiertas.map((c) => c.id),
+    );
+
+  if (error || !data) return 0;
+
+  let corregidas = 0;
+
+  for (const fila of data as { id: string; estado: string }[]) {
+    if (fila.estado === 'cerrada') {
+      await dbLocal.cajas.update(fila.id, { estado: 'cerrada' });
+      corregidas++;
+    }
+  }
+
+  return corregidas;
 }
 
 // ====================================================================

@@ -10,6 +10,8 @@ import {
 import { purgarLocal, type CajaLocal } from '@/lib/db-local';
 import {
   cajaAbierta,
+  cajasSinCerrar,
+  reconciliarCajasLocales,
   abrirCaja,
   cerrarCaja,
   type DeclaracionCierre,
@@ -42,14 +44,32 @@ export function useCaja({
   const [enCola, setEnCola] = useState(0);
 
   const [caja, setCaja] = useState<CajaLocal | null>(null);
+  const [cajasViejas, setCajasViejas] = useState<CajaLocal[]>([]);
   const [buscandoCaja, setBuscandoCaja] = useState(true);
 
-  useEffect(() => {
-    void cajaAbierta(vendedorId).then((c) => {
-      setCaja(c);
-      setBuscandoCaja(false);
-    });
+  // Primero se pone al día con el servidor: una caja cerrada desde
+  // otro equipo tiene que dejar de figurar abierta acá antes de
+  // decidir si hay que pedir el fondo inicial.
+  const revisarCajas = useCallback(async () => {
+    try {
+      await reconciliarCajasLocales(vendedorId);
+    } catch (e) {
+      console.error('No se pudo reconciliar las cajas con el servidor', e);
+    }
+
+    const [deHoy, viejas] = await Promise.all([
+      cajaAbierta(vendedorId),
+      cajasSinCerrar(vendedorId),
+    ]);
+
+    setCaja(deHoy);
+    setCajasViejas(viejas);
+    setBuscandoCaja(false);
   }, [vendedorId]);
+
+  useEffect(() => {
+    void revisarCajas();
+  }, [revisarCajas]);
 
   const abrir = useCallback(async (efectivoInicial: number) => {
     const nueva = await abrirCaja(vendedorId, sucursalId, efectivoInicial);
@@ -61,6 +81,15 @@ export function useCaja({
     await cerrarCaja(caja, d);
     setCaja(null);
   }, [caja]);
+
+  /** Cierra una caja de un día anterior que quedó abierta */
+  const cerrarVieja = useCallback(
+    async (vieja: CajaLocal, d: DeclaracionCierre) => {
+      await cerrarCaja(vieja, d);
+      setCajasViejas((previas) => previas.filter((c) => c.id !== vieja.id));
+    },
+    [],
+  );
 
   // ---- Suscripción al carrito ----
   useEffect(() => engine.suscribir(setCarrito), [engine]);
@@ -143,8 +172,8 @@ export function useCaja({
     };
   }, []);
 
- return {
+  return {
     engine, carrito, listo, infoCarga, online, enCola, catalogo,
-    caja, buscandoCaja, abrir, cerrar,
+    caja, cajasViejas, buscandoCaja, abrir, cerrar, cerrarVieja,
   };
 }

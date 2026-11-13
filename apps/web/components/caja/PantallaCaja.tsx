@@ -21,7 +21,7 @@ import { VentasDelDia } from './VentasDelDia';
 import { RemitoImprimible } from './RemitoImprimible';
 import { formatearPrecio } from '@pos/shared/constants/empresa';
 import type { DesglosePago } from '@/lib/venta-engine';
-import type { VentaLocal, ClienteLocal } from '@/lib/db-local';
+import type { VentaLocal, ClienteLocal, CajaLocal } from '@/lib/db-local';
 import type { RolUsuario } from '@pos/shared/types';
 
 interface Props {
@@ -52,9 +52,11 @@ export function PantallaCaja(props: Props) {
     enCola,
     catalogo: catalogoInfo,
     caja,
+    cajasViejas,
     buscandoCaja,
     abrir,
     cerrar,
+    cerrarVieja,
   } = useCaja({
     sucursalId: props.sucursalId,
     vendedorId: props.vendedorId,
@@ -76,6 +78,7 @@ export function PantallaCaja(props: Props) {
   const [servicioSeleccionado, setServicioSeleccionado] =
     useState<ArticuloServicio | null>(null);
   const [cerrando, setCerrando] = useState(false);
+  const [cajaVieja, setCajaVieja] = useState<CajaLocal | null>(null);
   const [avisoCierre, setAvisoCierre] = useState(false);
   const [trabadas, setTrabadas] = useState(0);
   const [imprimiendo, setImprimiendo] = useState(false);
@@ -177,6 +180,7 @@ export function PantallaCaja(props: Props) {
     viendoVentas ||
     !!servicioSeleccionado ||
     cerrando ||
+    !!cajaVieja ||
     avisoCierre ||
     !!ultimaVenta;
 
@@ -285,6 +289,7 @@ export function PantallaCaja(props: Props) {
         servicioSeleccionado ||
         buscando ||
         cerrando ||
+        cajaVieja ||
         avisoCierre ||
         !caja
       ) {
@@ -321,6 +326,7 @@ export function PantallaCaja(props: Props) {
     servicioSeleccionado,
     buscando,
     cerrando,
+    cajaVieja,
     avisoCierre,
     caja,
   ]);
@@ -329,11 +335,30 @@ export function PantallaCaja(props: Props) {
     return <p className="py-24 text-center text-verde-claro">Cargando…</p>;
   }
 
+  // El cierre de una caja vieja va antes que todo lo demás: se puede
+  // llegar acá con la caja de hoy abierta o sin abrir.
+  if (cajaVieja) {
+    return (
+      <CierreCaja
+        caja={cajaVieja}
+        umbralDiferencia={props.umbralDiferencia}
+        onCerrar={async (d) => {
+          await cerrarVieja(cajaVieja, d);
+          setCajaVieja(null);
+        }}
+        onVolver={() => setCajaVieja(null)}
+        cargando={false}
+      />
+    );
+  }
+
   if (!caja) {
     return (
       <AperturaCaja
         nombreVendedor={props.nombreVendedor}
         sucursal={props.nombreSucursal}
+        cajasViejas={cajasViejas}
+        onCerrarVieja={setCajaVieja}
         onAbrir={(monto) => void abrir(monto)}
         cargando={false}
       />
