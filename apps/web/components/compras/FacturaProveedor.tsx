@@ -83,6 +83,8 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
 
   const [termino, setTermino] = useState('');
   const [otros, setOtros] = useState<ArticuloCandidato[]>([]);
+  const [buscando, setBuscando] = useState(false);
+  const [errorBusqueda, setErrorBusqueda] = useState('');
 
   const [renglones, setRenglones] = useState<Renglon[]>([]);
   const [totalFactura, setTotalFactura] = useState('');
@@ -160,10 +162,14 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
     const t = termino.trim();
     if (t.length < 2) {
       setOtros([]);
+      setErrorBusqueda('');
+      setBuscando(false);
       return;
     }
 
     let cancelado = false;
+    setBuscando(true);
+
     const id = setTimeout(async () => {
       // Por nombre, por código de barras y por código interno: en el
       // mostrador es más rápido pasar el lector o tipear el código que
@@ -171,10 +177,14 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
       const limpio = paraFiltro(t);
       if (!limpio) {
         setOtros([]);
+        setBuscando(false);
         return;
       }
 
-      const { data } = await supabase
+      // El error de esta consulta se mostraba en ninguna parte: si
+      // fallaba, la lista quedaba vacía y parecía que el artículo no
+      // existía. Ahora se ve.
+      const { data, error: err } = await supabase
         .from('articulos')
         .select(CAMPOS_ARTICULO)
         .eq('activo', true)
@@ -187,6 +197,16 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
         .limit(25);
 
       if (cancelado) return;
+
+      setBuscando(false);
+
+      if (err) {
+        setErrorBusqueda(err.message);
+        setOtros([]);
+        return;
+      }
+
+      setErrorBusqueda('');
 
       const delProveedorIds = new Set(delProveedor.map((a) => a.id));
       setOtros(
@@ -349,6 +369,22 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
                 className="input"
               />
             </label>
+
+            {errorBusqueda && (
+              <p className="mt-1 text-sm text-rojo-plomo">
+                No se pudo buscar en el catálogo: {errorBusqueda}
+              </p>
+            )}
+
+            {termino.trim().length >= 2 &&
+              !buscando &&
+              !errorBusqueda &&
+              coincidencias.length === 0 &&
+              otros.length === 0 && (
+                <p className="mt-1 text-sm text-verde-claro">
+                  Ningún artículo activo coincide con «{termino.trim()}».
+                </p>
+              )}
 
             {(coincidencias.length > 0 || otros.length > 0) && (
               <ul
