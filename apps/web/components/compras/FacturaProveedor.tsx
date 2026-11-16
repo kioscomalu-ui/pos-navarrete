@@ -14,6 +14,8 @@ interface Proveedor {
 interface ArticuloCandidato {
   id: string;
   nombre: string;
+  codigoBarras: string | null;
+  codigoInterno: string | null;
   codigoProveedor: string | null;
   presentacion: string | null;
   costoAnterior: number | null;
@@ -38,8 +40,17 @@ interface Props {
 }
 
 const CAMPOS_ARTICULO =
-  'id, nombre, costo_unitario, margen_tipo, margen_valor, ' +
-  'precio_manual, precio_venta_final, proveedor_principal_id';
+  'id, nombre, codigo_barras, codigo_interno, costo_unitario, ' +
+  'margen_tipo, margen_valor, precio_manual, precio_venta_final, ' +
+  'proveedor_principal_id';
+
+/**
+ * PostgREST separa los filtros de un .or() con comas y agrupa con
+ * paréntesis, así que un término que los traiga rompe la consulta.
+ */
+function paraFiltro(t: string): string {
+  return t.replace(/[,()*]/g, ' ').trim();
+}
 
 /** "Caja x 12" → 12. Sirve para no tipear la cantidad cada vez. */
 function unidadesDePresentacion(p: string | null): string {
@@ -51,6 +62,8 @@ function desdeArticulo(a: any): ArticuloCandidato {
   return {
     id: a.id,
     nombre: a.nombre,
+    codigoBarras: a.codigo_barras ?? null,
+    codigoInterno: a.codigo_interno ?? null,
     codigoProveedor: null,
     presentacion: null,
     costoAnterior: null,
@@ -133,7 +146,9 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
         (a) =>
           !yaPuestos.has(a.id) &&
           (a.nombre.toLowerCase().includes(t) ||
-            (a.codigoProveedor ?? '').toLowerCase().includes(t)),
+            (a.codigoProveedor ?? '').toLowerCase().includes(t) ||
+            (a.codigoBarras ?? '').toLowerCase().includes(t) ||
+            (a.codigoInterno ?? '').toLowerCase().includes(t)),
       )
       .slice(0, 12);
   }, [termino, delProveedor, yaPuestos]);
@@ -150,12 +165,26 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
 
     let cancelado = false;
     const id = setTimeout(async () => {
+      // Por nombre, por código de barras y por código interno: en el
+      // mostrador es más rápido pasar el lector o tipear el código que
+      // escribir el nombre completo.
+      const limpio = paraFiltro(t);
+      if (!limpio) {
+        setOtros([]);
+        return;
+      }
+
       const { data } = await supabase
         .from('articulos')
         .select(CAMPOS_ARTICULO)
         .eq('activo', true)
-        .ilike('nombre', `%${t}%`)
-        .limit(15);
+        .or(
+          `nombre.ilike.%${limpio}%,` +
+            `codigo_barras.ilike.%${limpio}%,` +
+            `codigo_interno.ilike.%${limpio}%`,
+        )
+        .order('nombre')
+        .limit(25);
 
       if (cancelado) return;
 
@@ -315,7 +344,7 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
                 placeholder={
                   cargandoLista
                     ? 'Cargando artículos del proveedor…'
-                    : 'Buscar por nombre o código del proveedor…'
+                    : 'Buscar cualquier artículo: nombre, código de barras o código…'
                 }
                 className="input"
               />
@@ -350,7 +379,8 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
 
                 {otros.length > 0 && (
                   <li className="px-4 py-1.5 bg-papel text-xs text-verde-claro">
-                    Todavía no están asociados a este proveedor
+                    Resto del catálogo · al cargar la factura quedan asociados
+                    a este proveedor
                   </li>
                 )}
 
@@ -363,6 +393,9 @@ export function FacturaProveedor({ proveedores, reglaRedondeo }: Props) {
                     >
                       <div className="text-sm">{a.nombre}</div>
                       <div className="text-xs text-verde-claro num">
+                        {(a.codigoBarras || a.codigoInterno) && (
+                          <span>{a.codigoBarras ?? a.codigoInterno} · </span>
+                        )}
                         costo actual {formatearPrecio(a.costoUnitarioActual)}
                       </div>
                     </button>
